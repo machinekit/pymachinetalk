@@ -4,8 +4,8 @@ import os
 import time
 import signal
 import gobject
+import gevent.monkey; gevent.monkey.patch_all()
 import threading
-import gevent.monkey
 
 from machinekit import config
 from dns_sd import ServiceDiscovery
@@ -17,7 +17,15 @@ else:
     import ConfigParser as configparser
 
 
-gevent.monkey.patch_all()
+def idle(loop):
+    try:
+        gevent.sleep(0.1)
+    except:
+        loop.quit()
+        #gtk.main_quit()
+        #gevent.hub.MAIN.throw(*sys.exc_info())
+    return True
+
 
 shutdown = False
 
@@ -46,16 +54,14 @@ class TestClass():
         self.halrcmdReady = False
         self.halrcompReady = False
 
-        halrcomp = halremote.HalRemoteComponent( name='test')
+        halrcomp = halremote.HalRemoteComponent(name='test', debug=True)
         halrcomp.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
-        halrcomp.ready()
         self.halrcomp = halrcomp
 
         halrcomp2 = halremote.HalRemoteComponent(name='test2')
         halrcomp2.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp2.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
-        halrcomp2.ready()
         self.halrcomp2 = halrcomp2
 
         halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)
@@ -71,9 +77,9 @@ class TestClass():
 
     def start_halrcomp(self):
         print('connecting rcomp %s' % self.halrcomp.name)
-        self.halrcomp.start()
-        self.halrcomp2.start()
-        #start_timer()
+        self.halrcomp.ready()
+        self.halrcomp2.ready()
+        #gevent.spawn(self.start_timer)
 
     def halrcmd_discovered(self, name, dsn):
         print("discovered %s %s" % (name, dsn))
@@ -92,7 +98,10 @@ class TestClass():
             self.start_halrcomp()
 
     def start_timer(self):
-        glib.timeout_add(1000, self.toggle_pin)
+        while True:
+            gevent.sleep(1.0)
+            self.toggle_pin()
+        #glib.timeout_add(1000, self.toggle_pin)
 
     def toggle_pin(self):
         self.halrcomp['coolant'] = not self.halrcomp['coolant']
@@ -122,6 +131,7 @@ def main():
     #register_exit_handler()
     test = TestClass(uuid=uuid)
     loop = gobject.MainLoop()
+    gobject.idle_add(idle, loop)
     try:
         loop.run()
     except:
