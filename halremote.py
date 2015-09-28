@@ -179,7 +179,7 @@ class HalRemoteComponent():
         self.disconnect_sockets()
 
     def connect_sockets(self):
-        self.sockets_connected = False
+        self.sockets_connected = True
         self.halrcmd_socket.connect(self.halrcmdUri)
         self.halrcomp_socket.connect(self.halrcompUri)
 
@@ -189,6 +189,7 @@ class HalRemoteComponent():
         if self.sockets_connected:
             self.halrcmd_socket.disconnect(self.halrcmdUri)
             self.halrcomp_socket.disconnect(self.halrcompUri)
+            self.sockets_connected = False
 
     def send_cmd(self, msg_type):
         self.tx.type = msg_type
