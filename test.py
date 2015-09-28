@@ -9,6 +9,7 @@ import threading
 
 from machinekit import config
 from dns_sd import ServiceDiscovery
+from application import ApplicationStatus
 import halremote
 
 if sys.version_info >= (3, 0):
@@ -54,7 +55,7 @@ class TestClass():
         self.halrcmdReady = False
         self.halrcompReady = False
 
-        halrcomp = halremote.HalRemoteComponent(name='test', debug=True)
+        halrcomp = halremote.HalRemoteComponent(name='test')
         halrcomp.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp = halrcomp
@@ -63,6 +64,8 @@ class TestClass():
         halrcomp2.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp2.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp2 = halrcomp2
+
+        self.status = ApplicationStatus()
 
         halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)
         halrcmd_sd.discovered_callback = self.halrcmd_discovered
@@ -74,6 +77,12 @@ class TestClass():
         halrcomp_sd.discovered_callback = self.halrcomp_discovered
         halrcomp_sd.start()
         self.harcomp_sd = halrcomp_sd
+
+        status_sd = ServiceDiscovery(service_type="_status._sub._machinekit._tcp", uuid=uuid)
+        status_sd.discovered_callback = self.status_discovered
+        status_sd.disappeared_callback = self.status_disappeared
+        status_sd.start()
+        self.status_sd = status_sd
 
     def start_halrcomp(self):
         print('connecting rcomp %s' % self.halrcomp.name)
@@ -97,11 +106,27 @@ class TestClass():
         if self.halrcmdReady:
             self.start_halrcomp()
 
+    def status_discovered(self, name, dsn):
+        print('discovered %s %s' % (name, dsn))
+        self.status.status_uri = dsn
+        self.status.ready()
+        gevent.spawn(self.status_timer)
+
+    def status_disappeared(self, name):
+        print('%s disappeared' % name)
+        self.status.stop()
+
     def start_timer(self):
         while True:
             gevent.sleep(1.0)
             self.toggle_pin()
         #glib.timeout_add(1000, self.toggle_pin)
+
+    def status_timer(self):
+        while True:
+            if self.status.synced:
+                print('flood %s' % self.status.io.flood)
+            gevent.sleep(1.0)
 
     def toggle_pin(self):
         self.halrcomp['coolant'] = not self.halrcomp['coolant']
@@ -112,6 +137,8 @@ class TestClass():
             self.halrcomp.stop()
         if self.halrcomp2 is not None:
             self.halrcomp2.stop()
+        if self.status is not None:
+            self.status.stop()
 
 
 def main():
