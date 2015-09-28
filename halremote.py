@@ -1,8 +1,8 @@
-import zmq.green as zmq
 import time
 import uuid
 import platform
 
+import zmq.green as zmq
 import gevent
 import gevent.event
 from gevent import greenlet
@@ -41,14 +41,11 @@ class HalRemoteComponent():
         self.name = name
         self.pinsbyname = {}
         self.pinsbyhandle = {}
-        self.synced = False
-        self.is_ready = gevent.event.Event()
+        self.is_ready = False
         self.no_create = False
 
         self.halrcmdUri = ''
         self.halrcompUri = ''
-        self.halrcmd_socket = None
-        self.halrcomp_socket = None
         self.connected = False
         self.period = 3000
         self.ping_outstanding = False
@@ -62,8 +59,8 @@ class HalRemoteComponent():
         self.tx = Container()
         self.rx = Container()
 
-        client_id = '%s-%s' % (platform.node(), uuid.uuid4())
-        print(client_id)
+        # ZeroMQ
+        client_id = '%s-%s' % (platform.node(), uuid.uuid4())  # must be unique
         context = zmq.Context()
         context.linger = 0
         self.context = context
@@ -71,9 +68,9 @@ class HalRemoteComponent():
         self.halrcmd_socket.setsockopt(zmq.LINGER, 0)
         self.halrcmd_socket.setsockopt(zmq.IDENTITY, client_id)
         self.halrcomp_socket = self.context.socket(zmq.SUB)
+        self.sockets_connected = False
 
     def halrcmd_worker(self):
-        #while self.is_ready.is_set():
         try:
             while True:
                 msg = self.halrcmd_socket.recv()
@@ -141,6 +138,7 @@ class HalRemoteComponent():
                     if self.rx.HasField('pparams'):
                         interval = self.rx.pparams.keepalive_timer
                         self.halrcomp_period = interval * 2  # wait double the hearbeat intverval
+                        self.refresh_halrcomp_heartbeat()
 
                 elif self.rx.type == MT_PING:
                     if self.halrcomp_state == 'Up':
@@ -169,7 +167,7 @@ class HalRemoteComponent():
             self.threads.append(gevent.spawn(self.halrcmd_timer_tick))  # ping kicks off connection
 
     def stop(self):
-        self.is_ready.clear()
+        self.is_ready = False
         gevent.killall(self.threads, block=True)
         self.threads = []
         self.cleanup()
@@ -181,14 +179,16 @@ class HalRemoteComponent():
         self.disconnect_sockets()
 
     def connect_sockets(self):
+        self.sockets_connected = False
         self.halrcmd_socket.connect(self.halrcmdUri)
         self.halrcomp_socket.connect(self.halrcompUri)
 
         return True
 
     def disconnect_sockets(self):
-        self.halrcmd_socket.disconnect(self.halrcmdUri)
-        self.halrcomp_socket.disconnect(self.halrcompUri)
+        if self.sockets_connected:
+            self.halrcmd_socket.disconnect(self.halrcmdUri)
+            self.halrcomp_socket.disconnect(self.halrcompUri)
 
     def send_cmd(self, msg_type):
         self.tx.type = msg_type
@@ -218,18 +218,18 @@ class HalRemoteComponent():
             while True:
                 period = self.halrcomp_period
                 if period > 0:
-                    timestamp = time.clock() * 1000
+                    timestamp = time.time() * 1000
                     timediff = timestamp - self.halrcomp_timestamp
                     if timediff > period:
                         self.halrcomp_state = 'Down'
                         self.update_state('Timeout')
                         self.halrcomp_period = 0  # will be refreshed by full update
-                gevent.sleep(0.01)
+                gevent.sleep(0.1)
         except greenlet.GreenletExit:
             pass
 
     def refresh_halrcomp_heartbeat(self):
-        self.halrcomp_timestamp = time.clock() * 1000
+        self.halrcomp_timestamp = time.time() * 1000
 
     def update_state(self, state):
         if state != self.state:
@@ -262,8 +262,9 @@ class HalRemoteComponent():
         return self.pinsbyname[name]
 
     def ready(self):
-        self.is_ready.set()
-        self.start()
+        if not self.is_ready:
+            self.is_ready = True
+            self.start()
 
     def pin_update(self, rpin, lpin):
         if rpin.HasField('halfloat'):
