@@ -1,22 +1,12 @@
-#!/usr/bin/python
-
-import sys
 import os
-import signal
 import gobject
-from machinekit import config
-from dns_sd import ServiceDiscovery
 
-if sys.version_info >= (3, 0):
-    import configparser
-else:
-    import ConfigParser as configparser
-
-import time
-import zmq
+import zmq.green as zmq
 import threading
 import platform
 import glib
+
+import gevent
 
 # protobuf
 from message_pb2 import Container
@@ -45,7 +35,7 @@ class HalPin():
 
 
 class HalRemoteComponent():
-    def __init__(self, context, name, debug=False):
+    def __init__(self, name, debug=False):
         self.shutdown = threading.Event()
         self.running = False
         self.debug = debug
@@ -59,8 +49,8 @@ class HalRemoteComponent():
 
         self.halrcmdUri = ''
         self.halrcompUri = ''
-        self.halrcmdSocket = None
-        self.halrcompSocekt = None
+        self.halrcmd_socket = None
+        self.halrcomp_socket = None
         self.connected = False
         self.period = 3000
         self.ping_outstanding = False
@@ -75,20 +65,23 @@ class HalRemoteComponent():
         self.rx = Container()
 
         client_id = '%s-%s' % (platform.node(), os.getpid())
+        context = zmq.Context()
+        context.linger = 0
         self.context = context
-        self.halrcmdSocket = self.context.socket(zmq.DEALER)
-        self.halrcmdSocket.setsockopt(zmq.LINGER, 0)
-        self.halrcmdSocket.setsockopt(zmq.IDENTITY, client_id)
+        self.halrcmd_socket = self.context.socket(zmq.DEALER)
+        self.halrcmd_socket.setsockopt(zmq.LINGER, 0)
+        self.halrcmd_socket.setsockopt(zmq.IDENTITY, client_id)
         self.halrcomp_socket = self.context.socket(zmq.SUB)
 
-        zmq_fd = self.halrcmdSocket.getsockopt(zmq.FD)
-        gobject.io_add_watch(zmq_fd, gobject.IO_IN, self.halrcmd_callback, self.halrcmdSocket)
+        zmq_fd = self.halrcmd_socket.getsockopt(zmq.FD)
+        gobject.io_add_watch(zmq_fd, gobject.IO_IN, self.halrcmd_callback, self.halrcmd_socket)
         zmq_fd2 = self.halrcomp_socket.getsockopt(zmq.FD)
         gobject.io_add_watch(zmq_fd2, gobject.IO_IN, self.halrcomp_callback, self.halrcomp_socket)
 
     def halrcmd_callback(self, fd, condition, socket):
         del fd
         del condition
+        print(bool(socket.getsockopt(zmq.EVENTS) & zmq.POLLOUT))
         while socket.getsockopt(zmq.EVENTS) & zmq.POLLIN:
             msg = socket.recv()
             self.rx.ParseFromString(msg)
@@ -117,6 +110,7 @@ class HalRemoteComponent():
                     self.update_error('Pinchange', self.rx.note)
             else:
                 print('Warning: halrcmd receiced unsupported message')
+
         return True
 
     def halrcomp_callback(self, fd, condition, socket):
@@ -190,18 +184,19 @@ class HalRemoteComponent():
         self.disconnect_sockets()
 
     def connect_sockets(self):
-        self.halrcmdSocket.connect(self.halrcmdUri)
+        self.halrcmd_socket.connect(self.halrcmdUri)
         self.halrcomp_socket.connect(self.halrcompUri)
 
         return True
 
     def disconnect_sockets(self):
-        self.halrcmdSocket.disconnect()
-        self.halrcomp_socket.disconnect()
+        self.halrcmd_socket.disconnect(self.halrcmdUri)
+        self.halrcomp_socket.disconnect(self.halrcompUri)
 
     def start_halrcmd_heartbeat(self):
         timeout = self.period
         if not self.halrcmd_timer_id:
+            import random
             timeout = 10
         self.halrcmd_timer_id = glib.timeout_add(timeout, self.halrcmd_timer_tick)
 
@@ -221,7 +216,7 @@ class HalRemoteComponent():
         if self.debug:
             print('[%s] sending message: %s' % (self.name, msg_type))
             print(str(self.tx))
-        self.halrcmdSocket.send(self.tx.SerializeToString())
+        self.halrcmd_socket.send(self.tx.SerializeToString(), zmq.NOBLOCK)
         self.tx.Clear()
 
     def halrcmd_timer_tick(self):
@@ -359,118 +354,3 @@ class HalRemoteComponent():
 
     def __setitem__(self, k, v):
         self.pinsbyname[k].set(v)
-
-
-shutdown = False
-
-
-def _exitHandler(signum, frame):
-    del signum
-    del frame
-    global shutdown
-    shutdown = True
-    print("handled")
-
-
-# register exit signal handlers
-def register_exit_handler():
-    signal.signal(signal.SIGINT, _exitHandler)
-    signal.signal(signal.SIGTERM, _exitHandler)
-
-
-def check_exit():
-    global shutdown
-    return shutdown
-
-haltalkclient = None
-halrcmdReady = False
-halrcompReady = False
-
-
-def start_haltalkclient():
-    print('connecting rcomp %s' % haltalkclient.name)
-    haltalkclient.start()
-    #start_timer()
-
-
-def halrcmd_discovered(name, dsn):
-    global halrcmdReady
-    print("discovered %s %s" % (name, dsn))
-    haltalkclient.halrcmdUri = dsn
-    halrcmdReady = True
-    if halrcompReady:
-        start_haltalkclient()
-
-
-def halrcomp_discovered(name, dsn):
-    global halrcompReady
-    print("discovered %s %s" % (name, dsn))
-    haltalkclient.halrcompUri = dsn
-    halrcompReady = True
-    if halrcmdReady:
-        start_haltalkclient()
-
-
-def start_timer():
-    glib.timeout_add(1000, toggle_pin)
-
-
-def toggle_pin():
-    haltalkclient['coolant'] = not haltalkclient['coolant']
-    return True
-
-
-def main():
-    mkconfig = config.Config()
-    mkini = os.getenv("MACHINEKIT_INI")
-    if mkini is None:
-        mkini = mkconfig.MACHINEKIT_INI
-    if not os.path.isfile(mkini):
-        sys.stderr.write("MACHINEKIT_INI " + mkini + " does not exist\n")
-        sys.exit(1)
-
-    mki = configparser.ConfigParser()
-    mki.read(mkini)
-    uuid = mki.get("MACHINEKIT", "MKUUID")
-    # remote = mki.getint("MACHINEKIT", "REMOTE")
-
-    #register_exit_handler()
-    global haltalkclient
-    context = zmq.Context()
-    context.linger = 0
-    haltalkclient = HalRemoteComponent(context=context, name='test')
-    haltalkclient.newpin("coolant-iocontrol", HAL_BIT, HAL_IN)
-    haltalkclient.newpin("coolant", HAL_BIT, HAL_OUT)
-    haltalkclient.ready()
-
-    halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)
-    halrcmd_sd.discovered_callback = halrcmd_discovered
-    halrcmd_sd.start()
-    #halrcmd_sd.disappered_callback = disappeared
-
-    harcomp_sd = ServiceDiscovery(service_type="_halrcomp._sub._machinekit._tcp", uuid=uuid)
-    harcomp_sd.discovered_callback = halrcomp_discovered
-    harcomp_sd.start()
-
-    loop = gobject.MainLoop()
-    try:
-        loop.run()
-    except:
-        loop.quit()
-
-    # while dns_sd.running and not check_exit():
-    #     time.sleep(1)
-
-    print("stopping threads")
-    if haltalkclient is not None:
-        haltalkclient.stop()
-
-    # wait for all threads to terminate
-    while threading.active_count() > 1:
-        time.sleep(0.1)
-
-    print("threads stopped")
-    sys.exit(0)
-
-if __name__ == "__main__":
-    main()
