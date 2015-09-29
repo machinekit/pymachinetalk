@@ -47,7 +47,7 @@ class HalRemoteComponent():
         self.halrcmdUri = ''
         self.halrcompUri = ''
         self.connected = False
-        self.period = 3000
+        self.heartbeat_period = 3000
         self.ping_outstanding = False
         self.state = 'Disconnected'
         self.halrcmd_state = 'Down'
@@ -98,8 +98,10 @@ class HalRemoteComponent():
                         self.update_error('Bind', self.rx.note)
                     else:
                         self.update_error('Pinchange', self.rx.note)
+
                 else:
-                    print('Warning: halrcmd receiced unsupported message')
+                    print('[%s] Warning: halrcmd receiced unsupported message' % self.name)
+
         except greenlet.GreenletExit:
             pass  # gracefully dying
 
@@ -210,7 +212,10 @@ class HalRemoteComponent():
                 self.tx.Clear()
                 self.ping_outstanding = True
 
-                gevent.sleep(self.period / 1000)
+                if self.heartbeat_period > 0:
+                    gevent.sleep(self.heartbeat_period / 1000)
+                else:
+                    return
         except greenlet.GreenletExit:
             pass
 
@@ -243,7 +248,7 @@ class HalRemoteComponent():
                 print('[%s] disconnected' % self.name)
 
     def update_error(self, error, description):
-        print('error: %s %s' % (error, description))
+        print('[%s] error: %s %s' % (self.name, error, description))
 
     # create a new HAL pin
     def newpin(self, name, pintype, direction):
