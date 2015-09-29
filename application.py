@@ -234,8 +234,140 @@ class ApplicationStatus():
     def disconnect_sockets(self):
         if self.sockets_connected:
             self.status_socket.disconnect(self.status_uri)
+            self.sockets_connected = False
 
     def ready(self):
         if not self.is_ready:
             self.is_ready = True
             self.start()
+
+
+class ApplicationCommand():
+    def __init__(self, debug=False):
+        self.threads = []
+        self.debug = debug
+        self.is_ready = False
+
+        self.connected = False
+        self.state = 'Disconnected'
+        self.command_state = 'Down'
+
+        self.command_uri = ''
+        self.heartbeat_period = 3000
+        self.ping_error_count = 0
+        self.ping_error_threshold = 2
+
+        # more efficient to reuse a protobuf message
+        self.rx = Container()
+        self.tx = Container()
+
+        # ZeroMQ
+        client_id = '%s-%s' % (platform.node(), uuid.uuid4())  # must be unique
+        context = zmq.Context()
+        context.linger = 0
+        self.context = context
+        self.command_socket = self.context.socket(zmq.DEALER)
+        self.command_socket.setsockopt(zmq.LINGER, 0)
+        self.command_socket.setsockopt(zmq.IDENTITY, client_id)
+        self.sockets_connected = False
+
+    def send_command_msg(self, msg_type):
+        self.tx.type = msg_type
+        if self.debug:
+            print('[command] sending message: %s' % msg_type)
+            print(str(self.tx))
+        self.command_socket.send(self.tx.SerializeToString(), zmq.NOBLOCK)
+        self.tx.Clear()
+
+    def command_worker(self):
+        try:
+            while True:
+                msg = self.command_socket.recv()
+                self.rx.ParseFromString(msg)
+                if self.debug:
+                    print('[command] received message')
+                    print(self.rx)
+
+                if self.rx.type == MT_PING_ACKNOWLEDGE:
+                    self.ping_error_count = 0
+
+                    if not self.command_state == 'Up':
+                        self.command_state = 'Up'
+                        self.update_state('Connected')
+
+                elif self.rx.type == MT_ERROR:
+                    self.update_error('Service', self.rx.note)
+                    # should we disconnect here?
+
+                else:
+                    print('[command] received unsupported message')
+
+        except greenlet.GreenletExit:
+            pass  # gracefully dying
+
+    def start(self):
+        self.command_state = 'Trying'
+        self.update_state('Connecting')
+
+        if self.connect_sockets():
+            self.ping_error_count = 0  # reset heartbeat
+            self.threads.append(gevent.spawn(self.command_worker))
+            self.threads.append(gevent.spawn(self.heartbeat_timer_tick))
+
+    def stop(self):
+        self.is_ready = False
+        gevent.killall(self.threads, block=True)
+        self.cleanup()
+        self.update_state('Disconnected')
+
+    def cleanup(self):
+        # stop heartbeat
+        self.disconnect_sockets()
+
+    def connect_sockets(self):
+        self.sockets_connected = True
+        self.command_socket.connect(self.command_uri)
+
+        return True
+
+    def disconnect_sockets(self):
+        if self.sockets_connected:
+            self.command_socket.disconnect(self.command_uri)
+            self.sockets_connected = False
+
+    def ready(self):
+        if not self.is_ready:
+            self.is_ready = True
+            self.start()
+
+    def update_state(self, state):
+        if state != self.state:
+            self.state = state
+            if state == 'Connected':
+                self.connected = True
+                print('[command] connected')
+            elif self.connected:
+                self.connected = False
+                print('[command] disconnected')
+
+    def update_error(self, error, description):
+        print('[command] error: %s %s' % (error, description))
+
+    def heartbeat_timer_tick(self):
+        try:
+            while True:
+                self.ping_error_count += 1  # increase error count by one, threshold 2 means two timer ticks
+
+                if self.ping_error_count > self.ping_error_threshold:
+                    self.command_state = 'Trying'
+                    self.update_state('Timeout')
+
+                self.send_command_msg(MT_PING)
+
+                if self.heartbeat_period > 0:
+                    gevent.sleep(self.heartbeat_period / 1000)
+                else:
+                    return
+        except greenlet.GreenletExit:
+            pass
+
