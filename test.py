@@ -10,6 +10,7 @@ import threading
 from machinekit import config
 from dns_sd import ServiceDiscovery
 from application import ApplicationStatus
+from application import ApplicationCommand
 import halremote
 
 if sys.version_info >= (3, 0):
@@ -66,6 +67,7 @@ class TestClass():
         self.halrcomp2 = halrcomp2
 
         self.status = ApplicationStatus()
+        self.command = ApplicationCommand()
 
         halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)
         halrcmd_sd.discovered_callback = self.halrcmd_discovered
@@ -83,6 +85,11 @@ class TestClass():
         status_sd.disappeared_callback = self.status_disappeared
         status_sd.start()
         self.status_sd = status_sd
+
+        command_sd = ServiceDiscovery(service_type="_command._sub._machinekit._tcp", uuid=uuid)
+        command_sd.discovered_callback = self.command_discovered
+        command_sd.disappeared_callback = self.command_disappeared
+        command_sd.start()
 
     def start_halrcomp(self):
         print('connecting rcomp %s' % self.halrcomp.name)
@@ -115,6 +122,15 @@ class TestClass():
     def status_disappeared(self, name):
         print('%s disappeared' % name)
         self.status.stop()
+
+    def command_discovered(self, name, dsn):
+        print('discovered %s %s' % (name, dsn))
+        self.command.command_uri = dsn
+        self.command.ready()
+
+    def command_disappeared(self, name):
+        print('%s disappeared' % name)
+        self.command.stop()
 
     def start_timer(self):
         while True:
