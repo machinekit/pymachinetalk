@@ -13,6 +13,7 @@ from dns_sd import ServiceDiscovery
 import application
 from application import ApplicationStatus
 from application import ApplicationCommand
+from application import ApplicationError
 import halremote
 
 if sys.version_info >= (3, 0):
@@ -55,7 +56,7 @@ def check_exit():
 
 
 class TestClass():
-    def __init__(self, uuid, curses):
+    def __init__(self, uuid, use_curses):
         self.halrcmdReady = False
         self.halrcompReady = False
 
@@ -71,6 +72,7 @@ class TestClass():
 
         self.status = ApplicationStatus()
         self.command = ApplicationCommand()
+        self.error = ApplicationError()
 
         halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)
         halrcmd_sd.discovered_callback = self.halrcmd_discovered
@@ -94,9 +96,16 @@ class TestClass():
         command_sd.disappeared_callback = self.command_disappeared
         command_sd.start()
 
-        self.curses = curses
-        if not self.curses:
+        error_sd = ServiceDiscovery(service_type="_error._sub._machinekit._tcp", uuid=uuid)
+        error_sd.discovered_callback = self.error_discovered
+        error_sd.disappeared_callback = self.error_disappeared
+        error_sd.start()
+
+        self.use_curses = use_curses
+        if not self.use_curses:
             return
+
+        self.messages = []
 
         self.screen = curses.initscr()
         self.screen.keypad(True)
@@ -104,6 +113,7 @@ class TestClass():
         self.status_window = curses.newwin(10, 40, 1, 44)
         self.command_window = curses.newwin(10, 40, 1, 86)
         self.connection_window = curses.newwin(10, 80, 12, 2)
+        self.error_window = curses.newwin(20, 120, 12, 84)
         curses.noecho()
         curses.cbreak()
 
@@ -148,6 +158,15 @@ class TestClass():
         print('%s disappeared' % name)
         self.command.stop()
 
+    def error_discovered(self, name, dsn):
+        print('discovered %s %s' % (name, dsn))
+        self.error.error_uri = dsn
+        self.error.ready()
+
+    def error_disappeared(self, name):
+        print('%s disappeared' % name)
+        self.error.stop()
+
     def start_timer(self):
         while True:
             gevent.sleep(1.0)
@@ -158,7 +177,7 @@ class TestClass():
         while True:
             #if self.status.synced:
                 # print('flood %s' % self.status.io.flood)
-            if self.curses:
+            if self.use_curses:
                 self.update_screen()
             gevent.sleep(0.1)
 
@@ -173,6 +192,7 @@ class TestClass():
         con.addstr(1, 2, 'Connection')
         con.addstr(3, 4, 'Status: %s %s' % (str(self.status.synced), self.status.status_uri))
         con.addstr(4, 4, 'Command: %s %s' % (str(self.command.connected), self.command.command_uri))
+        con.addstr(5, 4, 'Error: %s %s' % (str(self.error.connected), self.error.error_uri))
         con.refresh()
 
         if not self.status.synced or not self.command.connected:
@@ -196,13 +216,26 @@ class TestClass():
         status.refresh()
 
         cmd = self.command_window
+        cmd.clear()
         cmd.border(0)
         cmd.addstr(1, 2, 'Command')
         cmd.addstr(3, 4, 'Estop - F1')
         cmd.addstr(4, 4, 'Power - F2')
         cmd.refresh()
 
-        #self.screen.refresh()
+        error = self.error_window
+        error.clear()
+        error.border(0)
+        error.addstr(1, 2, 'Notifications')
+        self.messages += self.error.get_messages()
+        pos = 0
+        for message in self.messages:
+            # msg_type = str(message['type'])
+            for note in message['notes']:
+                error.addstr(3 + pos, 4, str(note))
+                pos += 1
+        error.refresh()
+
         self.screen.nodelay(True)
         c = self.screen.getch()
         if c == curses.KEY_F1:
@@ -224,7 +257,7 @@ class TestClass():
         if self.status is not None:
             self.status.stop()
 
-        if self.curses:
+        if self.use_curses:
             curses.endwin()
 
 
@@ -243,7 +276,7 @@ def main():
     # remote = mki.getint("MACHINEKIT", "REMOTE")
 
     #register_exit_handler()
-    test = TestClass(uuid=uuid, curses=False)
+    test = TestClass(uuid=uuid, use_curses=True)
     loop = gobject.MainLoop()
     gobject.idle_add(idle, loop)
     try:

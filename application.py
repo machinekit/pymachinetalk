@@ -164,7 +164,7 @@ class ApplicationStatus():
             elif self.connected:
                 self.connected = False
                 self.clear_sync()
-                # stop heartbeat ?
+                self.status_period = 0  # stop heartbeat
                 if not state == 'Timeout':  # clear in case we have no timeout
                     self.motion.Clear()
                     self.config.Clear()
@@ -776,3 +776,158 @@ class ApplicationCommand():
             return
 
         self.send_command_msg(MT_SHUTDOWN)
+
+
+class ApplicationError():
+
+    NML_ERROR = MT_EMC_NML_ERROR
+    NML_TEXT = MT_EMC_NML_TEXT
+    NML_DISPLAY = MT_EMC_NML_DISPLAY
+    OPERATOR_ERROR = MT_EMC_OPERATOR_ERROR
+    OPERATOR_TEXT = MT_EMC_OPERATOR_TEXT
+    OPERATOR_DISPLAY = MT_EMC_OPERATOR_DISPLAY
+
+    def __init__(self, debug=False):
+        self.threads = []
+        self.debug = debug
+        self.is_ready = False
+
+        self.connected = False
+        self.state = 'Disconnected'
+        self.socket_state = 'Down'
+        self.channels = set(['error', 'text', 'display'])
+        self.error_list = []
+
+        self.error_uri = ''
+        self.heartbeat_period = 0
+        self.heartbeat_timestamp = 0
+        self.subscriptions = set()
+
+        # more efficient to reuse protobuf message
+        self.rx = Container()
+
+        # ZeroMQ
+        context = zmq.Context()
+        context.linger = 0
+        self.context = context
+        self.socket = self.context.socket(zmq.SUB)
+        self.sockets_connected = False
+
+    def error_worker(self):
+        try:
+            while True:
+                (topic, msg) = self.socket.recv_multipart()
+                self.rx.ParseFromString(msg)
+
+                if self.debug:
+                    print('[error] received message: %s' % topic)
+                    print(self.rx)
+
+                if self.rx.type == MT_EMC_NML_ERROR \
+                   or self.rx.type == MT_EMC_NML_TEXT \
+                   or self.rx.type == MT_EMC_NML_DISPLAY \
+                   or self.rx.type == MT_EMC_OPERATOR_TEXT \
+                   or self.rx.type == MT_EMC_OPERATOR_ERROR \
+                   or self.rx.type == MT_EMC_OPERATOR_DISPLAY:
+                    error = {'type': self.rx.type, 'notes': []}
+                    for note in self.rx.note:
+                        error['notes'].append(note)
+                    self.error_list.append(error)
+                    self.refresh_heartbeat()
+
+                elif self.rx.type == MT_PING:
+                    if self.socket_state == 'Up':
+                        self.refresh_heartbeat()
+                    else:
+                        if self.state == 'Timeout':  # waiting for the ping
+                            self.update_state('Connecting')
+                            self.unsubscribe()  # clean up previous subscription
+                            self.subscribe()  # trigger a fresh subscribe -> full update
+                        else:  # ping as result from subscription received
+                            self.socket_state = 'Up'
+                            self.update_state('Connected')
+
+                    if self.rx.HasField('pparams'):
+                        interval = self.rx.pparams.keepalive_timer
+                        self.heartbeat_period = interval * 2  # wait double the hearbeat intverval
+                        self.refresh_heartbeat()
+                else:
+                    print('[status] received unrecognized message type')
+
+        except greenlet.GreenletExit:
+            pass
+
+    # returns all received messages and clears the buffer
+    def get_messages(self):
+        messages = self.error_list
+        self.error_list = []
+        return messages
+
+    def heartbeat_timer_tick(self):
+        pass
+
+    def refresh_heartbeat(self):
+        self.heartbeat_timestamp = time.time() * 1000
+
+    def update_state(self, state):
+        if state != self.state:
+            self.state = state
+            if state == 'Connected':
+                self.connected = True
+                print('[error] connected')
+            elif self.connected:
+                self.connected = False
+                self.heartbeat_period = 0  # stop heartbeat
+                print('[error] disconnected')
+
+    def subscribe(self):
+        self.socket_state = 'Trying'
+
+        for channel in self.channels:
+            self.socket.setsockopt(zmq.SUBSCRIBE, channel)
+            self.subscriptions.add(channel)
+
+    def unsubscribe(self):
+        self.socket_state = 'Down'
+
+        for subscription in self.subscriptions:
+            self.socket.setsockopt(zmq.UNSUBSCRIBE, subscription)
+
+        self.subscriptions.clear()
+
+    def start(self):
+        self.socket_state = 'Trying'
+        self.update_state('Connecting')
+
+        if self.connect_sockets():
+            self.threads.append(gevent.spawn(self.error_worker))
+            self.threads.append(gevent.spawn(self.heartbeat_timer_tick))
+            self.subscribe()
+
+    def stop(self):
+        self.is_ready = False
+        gevent.killall(self.threads, block=True)
+        self.threads = []
+        self.cleanup()
+        self.update_state('Disconnected')
+
+    def cleanup(self):
+        if self.connected:
+            self.unsubscribe()
+        self.disconnect_sockets()
+
+    def connect_sockets(self):
+        self.sockets_connected = True
+        self.socket.connect(self.error_uri)
+
+        return True
+
+    def disconnect_sockets(self):
+        if self.sockets_connected:
+            self.socket.disconnect(self.error_uri)
+            self.sockets_connected = False
+
+    def ready(self):
+        if not self.is_ready:
+            self.is_ready = True
+            self.start()
