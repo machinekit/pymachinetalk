@@ -60,7 +60,7 @@ class TestClass():
         self.halrcmdReady = False
         self.halrcompReady = False
 
-        halrcomp = halremote.HalRemoteComponent(name='test')
+        halrcomp = halremote.component('test')
         halrcomp.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp = halrcomp

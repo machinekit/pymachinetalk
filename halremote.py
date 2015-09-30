@@ -349,3 +349,7 @@ class HalRemoteComponent():
 
     def __setitem__(self, k, v):
         self.pinsbyname[k].set(v)
+
+
+def component(name):
+    return HalRemoteComponent(name)
