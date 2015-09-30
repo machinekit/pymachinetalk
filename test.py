@@ -4,11 +4,13 @@ import os
 import time
 import signal
 import gobject
-import gevent.monkey; gevent.monkey.patch_all()
+import gevent.monkey; gevent.monkey.patch_all()  # patch modules for gevent
 import threading
+import curses
 
 from machinekit import config
 from dns_sd import ServiceDiscovery
+import application
 from application import ApplicationStatus
 from application import ApplicationCommand
 import halremote
@@ -19,6 +21,7 @@ else:
     import ConfigParser as configparser
 
 
+# necessary for gevent to cooperate with gobject eventloop
 def idle(loop):
     try:
         gevent.sleep(0.1)
@@ -52,7 +55,7 @@ def check_exit():
 
 
 class TestClass():
-    def __init__(self, uuid):
+    def __init__(self, uuid, curses):
         self.halrcmdReady = False
         self.halrcompReady = False
 
@@ -90,6 +93,19 @@ class TestClass():
         command_sd.discovered_callback = self.command_discovered
         command_sd.disappeared_callback = self.command_disappeared
         command_sd.start()
+
+        self.curses = curses
+        if not self.curses:
+            return
+
+        self.screen = curses.initscr()
+        self.screen.keypad(True)
+        self.dro_window = curses.newwin(10, 40, 1, 2)
+        self.status_window = curses.newwin(10, 40, 1, 44)
+        self.command_window = curses.newwin(10, 40, 1, 86)
+        self.connection_window = curses.newwin(10, 80, 12, 2)
+        curses.noecho()
+        curses.cbreak()
 
     def start_halrcomp(self):
         print('connecting rcomp %s' % self.halrcomp.name)
@@ -140,13 +156,65 @@ class TestClass():
 
     def status_timer(self):
         while True:
-            if self.status.synced:
-                print('flood %s' % self.status.io.flood)
-            gevent.sleep(1.0)
+            #if self.status.synced:
+                # print('flood %s' % self.status.io.flood)
+            if self.curses:
+                self.update_screen()
+            gevent.sleep(0.1)
 
     def toggle_pin(self):
         self.halrcomp['coolant'] = not self.halrcomp['coolant']
         return True
+
+    def update_screen(self):
+        con = self.connection_window
+        con.clear()
+        con.border(0)
+        con.addstr(1, 2, 'Connection')
+        con.addstr(3, 4, 'Status: %s %s' % (str(self.status.synced), self.status.status_uri))
+        con.addstr(4, 4, 'Command: %s %s' % (str(self.command.connected), self.command.command_uri))
+        con.refresh()
+
+        if not self.status.synced or not self.command.connected:
+            return
+
+        dro = self.dro_window
+        dro.clear()
+        dro.border(0)
+        dro.addstr(1, 2, "DRO")
+        for i, n in enumerate(['x', 'y', 'z']):  # range(self.status.config.axes):
+            pos = str(getattr(self.status.motion.position, n))
+            dro.addstr(3 + i, 4, '%s: %s' % (n, pos))
+        dro.refresh()
+
+        status = self.status_window
+        status.clear()
+        status.border(0)
+        status.addstr(1, 2, 'Status')
+        status.addstr(3, 4, 'Estop: %s' % str(self.status.task.task_state == application.EMC_TASK_STATE_ESTOP))
+        status.addstr(4, 4, 'Power: %s' % str(self.status.task.task_state == application.EMC_TASK_STATE_ON))
+        status.refresh()
+
+        cmd = self.command_window
+        cmd.border(0)
+        cmd.addstr(1, 2, 'Command')
+        cmd.addstr(3, 4, 'Estop - F1')
+        cmd.addstr(4, 4, 'Power - F2')
+        cmd.refresh()
+
+        #self.screen.refresh()
+        self.screen.nodelay(True)
+        c = self.screen.getch()
+        if c == curses.KEY_F1:
+            if self.status.task.task_state == application.EMC_TASK_STATE_ESTOP:
+                self.command.set_task_state('execute', ApplicationCommand.TASK_STATE_ESTOP_RESET)
+            else:
+                self.command.set_task_state('execute', ApplicationCommand.TASK_STATE_ESTOP)
+        elif c == curses.KEY_F2:
+            if self.status.task.task_state == application.EMC_TASK_STATE_ON:
+                self.command.set_task_state('execute', ApplicationCommand.TASK_STATE_OFF)
+            else:
+                self.command.set_task_state('execute', ApplicationCommand.TASK_STATE_ON)
 
     def stop(self):
         if self.halrcomp is not None:
@@ -155,6 +223,9 @@ class TestClass():
             self.halrcomp2.stop()
         if self.status is not None:
             self.status.stop()
+
+        if self.curses:
+            curses.endwin()
 
 
 def main():
@@ -172,7 +243,7 @@ def main():
     # remote = mki.getint("MACHINEKIT", "REMOTE")
 
     #register_exit_handler()
-    test = TestClass(uuid=uuid)
+    test = TestClass(uuid=uuid, curses=False)
     loop = gobject.MainLoop()
     gobject.idle_add(idle, loop)
     try:
