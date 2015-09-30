@@ -44,8 +44,8 @@ class HalRemoteComponent():
         self.is_ready = False
         self.no_create = False
 
-        self.halrcmdUri = ''
-        self.halrcompUri = ''
+        self.halrcmd_uri = ''
+        self.halrcomp_uri = ''
         self.connected = False
         self.heartbeat_period = 3000
         self.ping_outstanding = False
@@ -182,15 +182,15 @@ class HalRemoteComponent():
 
     def connect_sockets(self):
         self.sockets_connected = True
-        self.halrcmd_socket.connect(self.halrcmdUri)
-        self.halrcomp_socket.connect(self.halrcompUri)
+        self.halrcmd_socket.connect(self.halrcmd_uri)
+        self.halrcomp_socket.connect(self.halrcomp_uri)
 
         return True
 
     def disconnect_sockets(self):
         if self.sockets_connected:
-            self.halrcmd_socket.disconnect(self.halrcmdUri)
-            self.halrcomp_socket.disconnect(self.halrcompUri)
+            self.halrcmd_socket.disconnect(self.halrcmd_uri)
+            self.halrcomp_socket.disconnect(self.halrcomp_uri)
             self.sockets_connected = False
 
     def send_cmd(self, msg_type):
@@ -258,6 +258,16 @@ class HalRemoteComponent():
         pin.direction = direction
         pin.parent = self
         self.pinsbyname[name] = pin
+
+        if pintype == HAL_FLOAT:
+            pin.value = 0.0
+        elif pintype == HAL_BIT:
+            pin.value = False
+        elif pintype == HAL_S32:
+            pin.value = 0
+        elif pintype == HAL_U32:
+            pin.value = 0
+
         return pin
 
     def unsync_pins(self):
