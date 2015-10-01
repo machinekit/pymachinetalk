@@ -2,10 +2,11 @@ import time
 import uuid
 import platform
 
-import zmq.green as zmq
-import gevent
-import gevent.event
-from gevent import greenlet
+import zmq
+import threading
+#import gevent
+#import gevent.event
+#from gevent import greenlet
 
 # protobuf
 from message_pb2 import Container
@@ -22,20 +23,25 @@ class HalPin():
         self.synced = False
         self.handle = 0  # stores handle received on bind
         self.parent = None
+        self.lock = threading.Lock()
 
     def set(self, value):
-        self.value = value
-        self.synced = False
-        if self.parent:
-            self.parent.pin_change(self)
+        with self.lock:
+            self.value = value
+            self.synced = False
+            if self.parent:
+                self.parent.pin_change(self)
 
     def get(self):
-        return self.value
+        with self.lock:
+            return self.value
 
 
 class HalRemoteComponent():
     def __init__(self, name, debug=False):
         self.threads = []
+        self.shutdown = threading.Event()
+        self.tx_lock = threading.Lock()
         self.debug = debug
 
         self.name = name
@@ -52,8 +58,9 @@ class HalRemoteComponent():
         self.state = 'Disconnected'
         self.halrcmd_state = 'Down'
         self.halrcomp_state = 'Down'
-        self.halrcomp_timestamp = 0
         self.halrcomp_period = 0
+        self.halrcmd_timer = None
+        self.halrcomp_timer = None
 
         # more efficient to reuse a protobuf message
         self.tx = Container()
@@ -70,107 +77,115 @@ class HalRemoteComponent():
         self.halrcomp_socket = self.context.socket(zmq.SUB)
         self.sockets_connected = False
 
-    def halrcmd_worker(self):
-        try:
-            while True:
-                msg = self.halrcmd_socket.recv()
-                self.rx.ParseFromString(msg)
-                if self.debug:
-                    print('[%s] received message on halrcmd:' % self.name)
-                    print(self.rx)
+    def socket_worker(self):
+        poll = zmq.Poller()
+        poll.register(self.halrcmd_socket, zmq.POLLIN)
+        poll.register(self.halrcomp_socket, zmq.POLLIN)
 
-                if self.rx.type == MT_PING_ACKNOWLEDGE:
-                    self.ping_outstanding = False
-                    if self.halrcmd_state == 'Trying':
-                        self.update_state('Connecting')
-                        self.bind()
+        while not self.shutdown.is_set():
+            s = dict(poll.poll(200))
+            if self.halrcmd_socket in s:
+                self.process_halrcmd()
+            if self.halrcomp_socket in s:
+                self.process_halrcomp()
 
-                elif self.rx.type == MT_HALRCOMP_BIND_CONFIRM:
-                    self.halrcmd_state = 'Up'
-                    self.unsubscribe()  # clear previous subscription
-                    self.subscribe()  # trigger full update
+    def process_halrcmd(self):
+        msg = self.halrcmd_socket.recv()
+        self.rx.ParseFromString(msg)
+        if self.debug:
+            print('[%s] received message on halrcmd:' % self.name)
+            print(self.rx)
 
-                elif self.rx.type == MT_HALRCOMP_BIND_REJECT \
-                or self.rx.type == MT_HALRCOMP_SET_REJECT:
-                    self.halrcmd_state = 'Down'
-                    updateState('Error')
-                    if self.rx.type == MT_HALRCOMP_BIND_REJECT:
-                        self.update_error('Bind', self.rx.note)
-                    else:
-                        self.update_error('Pinchange', self.rx.note)
+        if self.rx.type == MT_PING_ACKNOWLEDGE:
+            self.ping_outstanding = False
+            if self.halrcmd_state == 'Trying':
+                self.update_state('Connecting')
+                self.bind()
 
-                else:
-                    print('[%s] Warning: halrcmd receiced unsupported message' % self.name)
+        elif self.rx.type == MT_HALRCOMP_BIND_CONFIRM:
+            self.halrcmd_state = 'Up'
+            self.unsubscribe()  # clear previous subscription
+            self.subscribe()  # trigger full update
 
-        except greenlet.GreenletExit:
-            pass  # gracefully dying
+        elif self.rx.type == MT_HALRCOMP_BIND_REJECT \
+        or self.rx.type == MT_HALRCOMP_SET_REJECT:
+            self.halrcmd_state = 'Down'
+            updateState('Error')
+            if self.rx.type == MT_HALRCOMP_BIND_REJECT:
+                self.update_error('Bind', self.rx.note)
+            else:
+                self.update_error('Pinchange', self.rx.note)
 
-    def halrcomp_worker(self):
-        try:
-            while True:
-                (topic, msg) = self.halrcomp_socket.recv_multipart()
-                self.rx.ParseFromString(msg)
+        else:
+            print('[%s] Warning: halrcmd receiced unsupported message' % self.name)
 
-                if topic != self.name:  # ignore uninteresting messages
-                    continue
+    def process_halrcomp(self):
+        (topic, msg) = self.halrcomp_socket.recv_multipart()
+        self.rx.ParseFromString(msg)
 
-                if self.debug:
-                    print('[%s] received message on halrcomp: topic %s' % (self.name, topic))
-                    print(self.rx)
+        if topic != self.name:  # ignore uninteresting messages
+            return
 
-                if self.rx.type == MT_HALRCOMP_INCREMENTAL_UPDATE:
-                    for rpin in self.rx.pin:
-                        lpin = self.pinsbyhandle[rpin.handle]
-                        self.pin_update(rpin, lpin)
-                        self.refresh_halrcomp_heartbeat()
+        if self.debug:
+            print('[%s] received message on halrcomp: topic %s' % (self.name, topic))
+            print(self.rx)
 
-                elif self.rx.type == MT_HALRCOMP_FULL_UPDATE:
-                    comp = self.rx.comp[0]
-                    for rpin in comp.pin:
-                        name = rpin.name.split('.')[1]
-                        lpin = self.pinsbyname[name]
-                        lpin.handle = rpin.handle
-                        self.pinsbyhandle[rpin.handle] = lpin
-                        self.pin_update(rpin, lpin)
+        if self.rx.type == MT_HALRCOMP_INCREMENTAL_UPDATE:
+            for rpin in self.rx.pin:
+                lpin = self.pinsbyhandle[rpin.handle]
+                self.pin_update(rpin, lpin)
+                self.refresh_halrcomp_heartbeat()
 
-                    if self.halrcomp_state != 'Up':  # will be executed only once
-                        self.halrcomp_state = 'Up'
-                        self.update_state('Connected')
+        elif self.rx.type == MT_HALRCOMP_FULL_UPDATE:
+            comp = self.rx.comp[0]
+            for rpin in comp.pin:
+                name = rpin.name.split('.')[1]
+                lpin = self.pinsbyname[name]
+                lpin.handle = rpin.handle
+                self.pinsbyhandle[rpin.handle] = lpin
+                self.pin_update(rpin, lpin)
 
-                    if self.rx.HasField('pparams'):
-                        interval = self.rx.pparams.keepalive_timer
-                        self.halrcomp_period = interval * 2  # wait double the hearbeat intverval
-                        self.refresh_halrcomp_heartbeat()
+            if self.halrcomp_state != 'Up':  # will be executed only once
+                self.halrcomp_state = 'Up'
+                self.update_state('Connected')
 
-                elif self.rx.type == MT_PING:
-                    if self.halrcomp_state == 'Up':
-                        self.refresh_halrcomp_heartbeat()
-                    else:
-                        self.update_state('Connecting')
-                        self.unsubscribe()  # clean up previous subscription
-                        self.subscribe()  # trigger a fresh subscribe -> full update
+            if self.rx.HasField('pparams'):
+                interval = self.rx.pparams.keepalive_timer
+                self.start_halrcomp_heartbeat(interval * 2)
 
-                elif self.rx.type == MT_HALRCOMMAND_ERROR:
-                    self.halrcomp_state = 'Down'
-                    self.update_state('Error')
-                    self.update_error('halrcomp', self.rx.note)
+        elif self.rx.type == MT_PING:
+            if self.halrcomp_state == 'Up':
+                self.refresh_halrcomp_heartbeat()
+            else:
+                self.update_state('Connecting')
+                self.unsubscribe()  # clean up previous subscription
+                self.subscribe()  # trigger a fresh subscribe -> full update
 
-        except greenlet.GreenletExit:
-            pass
+        elif self.rx.type == MT_HALRCOMMAND_ERROR:
+            self.halrcomp_state = 'Down'
+            self.update_state('Error')
+            self.update_error('halrcomp', self.rx.note)
 
     def start(self):
         self.halrcmd_state = 'Trying'
         self.update_state('Connecting')
 
         if self.connect_sockets():
-            self.threads.append(gevent.spawn(self.halrcmd_worker))
-            self.threads.append(gevent.spawn(self.halrcomp_worker))
-            self.threads.append(gevent.spawn(self.halrcomp_timer_tick))
-            self.threads.append(gevent.spawn(self.halrcmd_timer_tick))  # ping kicks off connection
+            self.shutdown.clear()  # in case we already used the component
+            self.threads.append(threading.Thread(target=self.socket_worker))
+            self.threads.append(threading.Thread(target=self.halrcomp_timer_tick))
+            self.threads.append(threading.Thread(target=self.halrcmd_timer_tick))
+            for thread in self.threads:
+                thread.start()
+            self.start_halrcmd_heartbeat()
+            with self.tx_lock:
+                self.send_cmd(MT_PING)
 
     def stop(self):
         self.is_ready = False
-        gevent.killall(self.threads, block=True)
+        self.shutdown.set()
+        for thread in self.threads:
+            thread.join()
         self.threads = []
         self.cleanup()
         self.update_state('Disconnected')
@@ -178,6 +193,7 @@ class HalRemoteComponent():
     def cleanup(self):
         if self.connected:
             self.unsubscribe()
+        self.stop_halrcmd_heartbeat()
         self.disconnect_sockets()
 
     def connect_sockets(self):
@@ -202,40 +218,62 @@ class HalRemoteComponent():
         self.tx.Clear()
 
     def halrcmd_timer_tick(self):
-        try:
-            while True:
-                if self.ping_outstanding:
-                    self.halrcmd_state = 'Trying'
-                    self.update_state('Timeout')
+        if not self.connected:
+            return
 
-                self.send_cmd(MT_PING)
-                self.tx.Clear()
-                self.ping_outstanding = True
+        if self.ping_outstanding:
+            self.halrcmd_state = 'Trying'
+            self.update_state('Timeout')
 
-                if self.heartbeat_period > 0:
-                    gevent.sleep(self.heartbeat_period / 1000)
-                else:
-                    return
-        except greenlet.GreenletExit:
-            pass
+        with self.tx_lock:
+            self.send_cmd(MT_PING)
+        self.ping_outstanding = True
+
+        self.halrcmd_timer = threading.Timer(self.heartbeat_period / 1000,
+                                             self.halrcmd_timer_tick)
+        self.halrcmd_timer.start()  # rearm timer
+
+    def start_halrcmd_heartbeat(self):
+        if not self.connected:
+            return
+
+        self.ping_outstanding = False
+
+        if self.heartbeat_period > 0:
+            self.halrcmd_timer = threading.Timer(self.heartbeat_period / 1000,
+                                                 self.halrcmd_timer_tick)
+            self.halrcmd_timer.start()
+
+    def stop_halrcmd_heartbeat(self):
+        if self.halrcmd_timer:
+            self.halrcmd_timer.cancel()
+            self.halrcmd_timer = None
 
     def halrcomp_timer_tick(self):
-        try:
-            while True:
-                period = self.halrcomp_period
-                if period > 0:
-                    timestamp = time.time() * 1000
-                    timediff = timestamp - self.halrcomp_timestamp
-                    if timediff > period:
-                        self.halrcomp_state = 'Down'
-                        self.update_state('Timeout')
-                        self.halrcomp_period = 0  # will be refreshed by full update
-                gevent.sleep(0.1)
-        except greenlet.GreenletExit:
-            pass
+        self.halrcomp_state = 'Down'
+        self.update_state('Timeout')
+
+    def start_halrcomp_heartbeat(self, interval):
+        if self.halrcomp_timer:
+            self.halrcomp_timer.cancel()
+
+        self.halrcomp_period = interval
+        if interval > 0:
+            self.halrcomp_timer = threading.Timer(interval / 1000,
+                                                  self.halrcomp_timer_tick)
+            self.halrcomp_timer.start()
+
+    def stop_halrcomp_heartbeat(self):
+        if self.halrcomp_timer:
+            self.halrcomp_timer.cancel()
+            self.halrcomp_timer = None
 
     def refresh_halrcomp_heartbeat(self):
-        self.halrcomp_timestamp = time.time() * 1000
+        if self.halrcomp_timer:
+            self.halrcomp_timer.cancel()
+            self.halrcomp_timer = threading.Timer(self.halrcomp_period / 1000,
+                                                  self.halrcomp_timer_tick)
+            self.halrcomp_timer.start()
 
     def update_state(self, state):
         if state != self.state:
@@ -245,6 +283,7 @@ class HalRemoteComponent():
                 print('[%s] connected' % self.name)
             elif self.connected:
                 self.connected = False
+                self.stop_halrcomp_heartbeat()
                 print('[%s] disconnected' % self.name)
 
     def update_error(self, error, description):
@@ -283,6 +322,7 @@ class HalRemoteComponent():
             self.start()
 
     def pin_update(self, rpin, lpin):
+        lpin.lock.acquire()
         if rpin.HasField('halfloat'):
             lpin.value = float(rpin.halfloat)
             lpin.synced = True
@@ -295,6 +335,7 @@ class HalRemoteComponent():
         elif rpin.HasField('halu32'):
             lpin.value = int(rpin.halu32)
             lpin.synced = True
+        lpin.lock.release()
 
     def pin_change(self, pin):
         if self.debug:
@@ -312,28 +353,10 @@ class HalRemoteComponent():
         # Each Pin message MUST carry the type field
         # Each Pin message MUST - depending on pin type - carry a halbit,
         # halfloat, hals32, or halu32 field.
-        p = self.tx.pin.add()
-        p.handle = pin.handle
-        p.type = pin.pintype
-        if p.type == HAL_FLOAT:
-            p.halfloat = float(pin.value)
-        elif p.type == HAL_BIT:
-            p.halbit = bool(pin.value)
-        elif p.type == HAL_S32:
-            p.hals32 = int(pin.value)
-        elif p.type == HAL_U32:
-            p.halu32 = int(pin.value)
-        self.send_cmd(MT_HALRCOMP_SET)
-
-    def bind(self):
-        c = self.tx.comp.add()
-        c.name = self.name
-        c.no_create = self.no_create  # for now we create the component
-        for name, pin in self.pinsbyname.iteritems():
-            p = c.pin.add()
-            p.name = '%s.%s' % (self.name, name)
+        with self.tx_lock:
+            p = self.tx.pin.add()
+            p.handle = pin.handle
             p.type = pin.pintype
-            p.dir = pin.direction
             if p.type == HAL_FLOAT:
                 p.halfloat = float(pin.value)
             elif p.type == HAL_BIT:
@@ -342,9 +365,29 @@ class HalRemoteComponent():
                 p.hals32 = int(pin.value)
             elif p.type == HAL_U32:
                 p.halu32 = int(pin.value)
-        if self.debug:
-            print('[%s] bind' % self.name)
-        self.send_cmd(MT_HALRCOMP_BIND)
+            self.send_cmd(MT_HALRCOMP_SET)
+
+    def bind(self):
+        with self.tx_lock:
+            c = self.tx.comp.add()
+            c.name = self.name
+            c.no_create = self.no_create  # for now we create the component
+            for name, pin in self.pinsbyname.iteritems():
+                p = c.pin.add()
+                p.name = '%s.%s' % (self.name, name)
+                p.type = pin.pintype
+                p.dir = pin.direction
+                if p.type == HAL_FLOAT:
+                    p.halfloat = float(pin.value)
+                elif p.type == HAL_BIT:
+                    p.halbit = bool(pin.value)
+                elif p.type == HAL_S32:
+                    p.hals32 = int(pin.value)
+                elif p.type == HAL_U32:
+                    p.halu32 = int(pin.value)
+            if self.debug:
+                print('[%s] bind' % self.name)
+            self.send_cmd(MT_HALRCOMP_BIND)
 
     def subscribe(self):
         self.halrcomp_state = 'Trying'
