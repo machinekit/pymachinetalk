@@ -173,8 +173,6 @@ class HalRemoteComponent():
         if self.connect_sockets():
             self.shutdown.clear()  # in case we already used the component
             self.threads.append(threading.Thread(target=self.socket_worker))
-            self.threads.append(threading.Thread(target=self.halrcomp_timer_tick))
-            self.threads.append(threading.Thread(target=self.halrcmd_timer_tick))
             for thread in self.threads:
                 thread.start()
             self.start_halrcmd_heartbeat()

@@ -4,9 +4,9 @@ import os
 import time
 import signal
 import gobject
-import gevent.monkey; gevent.monkey.patch_all()  # patch modules for gevent
 import threading
 import curses
+gobject.threads_init()
 
 from machinekit import config
 from dns_sd import ServiceDiscovery
@@ -20,18 +20,6 @@ if sys.version_info >= (3, 0):
     import configparser
 else:
     import ConfigParser as configparser
-
-
-# necessary for gevent to cooperate with gobject eventloop
-def idle(loop):
-    try:
-        gevent.sleep(0.1)
-    except:
-        loop.quit()
-        #gtk.main_quit()
-        #gevent.hub.MAIN.throw(*sys.exc_info())
-    return True
-
 
 shutdown = False
 
@@ -101,6 +89,8 @@ class TestClass():
         error_sd.disappeared_callback = self.error_disappeared
         error_sd.start()
 
+        self.timer = None
+
         self.use_curses = use_curses
         if not self.use_curses:
             return
@@ -125,16 +115,16 @@ class TestClass():
 
     def halrcmd_discovered(self, name, dsn):
         print("discovered %s %s" % (name, dsn))
-        self.halrcomp.halrcmdUri = dsn
-        self.halrcomp2.halrcmdUri = dsn
+        self.halrcomp.halrcmd_uri = dsn
+        self.halrcomp2.halrcmd_uri = dsn
         self.halrcmdReady = True
         if self.halrcompReady:
             self.start_halrcomp()
 
     def halrcomp_discovered(self, name, dsn):
         print("discovered %s %s" % (name, dsn))
-        self.halrcomp.halrcompUri = dsn
-        self.halrcomp2.halrcompUri = dsn
+        self.halrcomp.halrcomp_uri = dsn
+        self.halrcomp2.halrcomp_uri = dsn
         self.halrcompReady = True
         if self.halrcmdReady:
             self.start_halrcomp()
@@ -143,7 +133,8 @@ class TestClass():
         print('discovered %s %s' % (name, dsn))
         self.status.status_uri = dsn
         self.status.ready()
-        gevent.spawn(self.status_timer)
+        self.timer = threading.Timer(0.1, self.status_timer)
+        self.timer.start()
 
     def status_disappeared(self, name):
         print('%s disappeared' % name)
@@ -168,18 +159,18 @@ class TestClass():
         self.error.stop()
 
     def start_timer(self):
-        while True:
-            gevent.sleep(1.0)
-            self.toggle_pin()
+        self.toggle_pin()
+        timer = threading.Timer(1.0, self.start_timer)
+        timer.start()
         #glib.timeout_add(1000, self.toggle_pin)
 
     def status_timer(self):
-        while True:
-            #if self.status.synced:
-                # print('flood %s' % self.status.io.flood)
-            if self.use_curses:
-                self.update_screen()
-            gevent.sleep(0.1)
+        #if self.status.synced:
+        # print('flood %s' % self.status.io.flood)
+        if self.use_curses:
+            self.update_screen()
+        self.timer = threading.Timer(0.1, self.status_timer)
+        self.timer.start()
 
     def toggle_pin(self):
         self.halrcomp['coolant'] = not self.halrcomp['coolant']
@@ -256,9 +247,23 @@ class TestClass():
             self.halrcomp2.stop()
         if self.status is not None:
             self.status.stop()
+        if self.command is not None:
+            self.command.stop()
+        if self.error is not None:
+            self.error.stop()
+
+        if self.timer:
+            self.timer.cancel()
 
         if self.use_curses:
             curses.endwin()
+
+
+def idle(loop):
+    try:
+        time.sleep(0.01)
+    except:
+        loop.quit()
 
 
 def main():
@@ -278,10 +283,10 @@ def main():
     #register_exit_handler()
     test = TestClass(uuid=uuid, use_curses=True)
     loop = gobject.MainLoop()
-    gobject.idle_add(idle, loop)
+    # gobject.idle_add(idle, loop)
     try:
         loop.run()
-    except:
+    except KeyboardInterrupt:
         loop.quit()
 
     # while dns_sd.running and not check_exit():
