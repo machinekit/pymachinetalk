@@ -6,7 +6,6 @@ import signal
 import gobject
 import threading
 import curses
-gobject.threads_init()
 
 from machinekit import config
 from dns_sd import ServiceDiscovery
@@ -259,13 +258,6 @@ class TestClass():
             curses.endwin()
 
 
-def idle(loop):
-    try:
-        time.sleep(0.01)
-    except:
-        loop.quit()
-
-
 def main():
     mkconfig = config.Config()
     mkini = os.getenv("MACHINEKIT_INI")
@@ -280,10 +272,10 @@ def main():
     uuid = mki.get("MACHINEKIT", "MKUUID")
     # remote = mki.getint("MACHINEKIT", "REMOTE")
 
+    gobject.threads_init()  # important: initialize threads if gobject main loop is used
     #register_exit_handler()
     test = TestClass(uuid=uuid, use_curses=True)
     loop = gobject.MainLoop()
-    # gobject.idle_add(idle, loop)
     try:
         loop.run()
     except KeyboardInterrupt:
