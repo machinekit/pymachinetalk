@@ -18,23 +18,40 @@ class HalPin():
         self.name = ''
         self.pintype = HAL_BIT
         self.direction = HAL_IN
-        self.synced = False
-        self.value = None
-        self.synced = False
+        self._synced = False
+        self._value = None
         self.handle = 0  # stores handle received on bind
         self.parent = None
         self.lock = threading.Lock()
 
-    def set(self, value):
+    @property
+    def value(self):
         with self.lock:
-            self.value = value
-            self.synced = False
-            if self.parent:
-                self.parent.pin_change(self)
+            return self._value
+
+    @value.setter
+    def value(self, value):
+        with self.lock:
+            self._value = value
+
+    @property
+    def synced(self):
+        with self.lock:
+            return self._synced
+
+    @synced.setter
+    def synced(self, value):
+        with self.lock:
+            self._synced = value
+
+    def set(self, value):
+        self.value = value
+        self.synced = False
+        if self.parent:
+            self.parent.pin_change(self)
 
     def get(self):
-        with self.lock:
-            return self.value
+        return self.value
 
 
 class HalRemoteComponent():

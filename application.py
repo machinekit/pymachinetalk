@@ -32,11 +32,11 @@ class ApplicationStatus():
         self.running = False
 
         # status containers, also used to expose data
-        self.io = EmcStatusIo()
-        self.config = EmcStatusConfig()
-        self.motion = EmcStatusMotion()
-        self.task = EmcStatusTask()
-        self.interp = EmcStatusInterp()
+        self._io = EmcStatusIo()
+        self._config = EmcStatusConfig()
+        self._motion = EmcStatusMotion()
+        self._task = EmcStatusTask()
+        self._interp = EmcStatusInterp()
 
         self.status_uri = ''
         self.status_period = 0
@@ -53,6 +53,33 @@ class ApplicationStatus():
         self.context = context
         self.status_socket = self.context.socket(zmq.SUB)
         self.sockets_connected = False
+
+    # make sure locks are used when accessing properties
+    # should we return a copy instead of the reference?
+    @property
+    def io(self):
+        with self.io_lock:
+            return self._io
+
+    @property
+    def config(self):
+        with self.config_lock:
+            return self._config
+
+    @property
+    def motion(self):
+        with self.motion_lock:
+            return self._motion
+
+    @property
+    def task(self):
+        with self.task_lock:
+            return self._task
+
+    @property
+    def interp(self):
+        with self.interp_lock:
+            return self._interp
 
     def socket_worker(self):
         poll = zmq.Poller()
@@ -122,23 +149,25 @@ class ApplicationStatus():
 
     def update_motion(self, data):
         with self.motion_lock:
-            self.motion.MergeFrom(data)
+            self._motion.MergeFrom(data)
 
     def update_config(self, data):
         with self.config_lock:
-            self.config.MergeFrom(data)
+            self._config.MergeFrom(data)
 
     def update_io(self, data):
         with self.io_lock:
-            self.io.MergeFrom(data)
+            self._io.MergeFrom(data)
 
     def update_task(self, data):
         with self.task_lock:
-            self.task.MergeFrom(data)
+            self._task.MergeFrom(data)
+            self.update_running()
 
     def update_interp(self, data):
         with self.interp_lock:
-            self.interp.MergeFrom(data)
+            self._interp.MergeFrom(data)
+            self.update_running()
 
     def update_sync(self, channel):
         self.synced_channels.add(channel)
@@ -189,15 +218,15 @@ class ApplicationStatus():
                 self.status_period = 0  # stop heartbeat
                 if not state == 'Timeout':  # clear in case we have no timeout
                     with self.motion_lock:
-                        self.motion.Clear()
+                        self._motion.Clear()
                     with self.config_lock:
-                        self.config.Clear()
+                        self._config.Clear()
                     with self.io_lock:
-                        self.io.Clear()
+                        self._io.Clear()
                     with self.task_lock:
-                        self.task.Clear()
+                        self._task.Clear()
                     with self.interp_lock:
-                        self.interp.Clear()
+                        self._interp.Clear()
                 print('[status] disconnected')
 
     def subscribe(self):
@@ -214,26 +243,26 @@ class ApplicationStatus():
             self.status_socket.setsockopt(zmq.UNSUBSCRIBE, subscription)
             if subscription == 'motion':
                 with self.motion_lock:
-                    self.motion.Clear()
+                    self._motion.Clear()
             elif subscription == 'config':
                 with self.config_lock:
-                    self.config.Clear()
+                    self._config.Clear()
             elif subscription == 'io':
                 with self.io_lock:
-                    self.io.Clear()
+                    self._io.Clear()
             elif subscription == 'task':
                 with self.task_lock:
-                    self.task.Clear()
+                    self._task.Clear()
             elif subscription == 'interp':
                 with self.interp_lock:
-                    self.interp.Clear()
+                    self._interp.Clear()
 
         self.subscriptions.clear()
 
     def update_running(self):
-        running = (self.task.task_mode == EMC_TASK_MODE_AUTO \
-                   or self.task.task_mode == EMC_TASK_MODE_MDI) \
-                   and self.interp.interp_state == EMC_TASK_INTERP_IDLE
+        running = (self._task.task_mode == EMC_TASK_MODE_AUTO \
+                   or self._task.task_mode == EMC_TASK_MODE_MDI) \
+                   and self._interp.interp_state == EMC_TASK_INTERP_IDLE
 
         self.running = running
 
@@ -967,9 +996,10 @@ class ApplicationError():
 
     # returns all received messages and clears the buffer
     def get_messages(self):
-        messages = self.error_list
-        self.error_list = []
-        return messages
+        with self.message_lock:
+            messages = list(self.error_list)  # make sure to return a copy
+            self.error_list = []
+            return messages
 
     def heartbeat_timer_tick(self):
         self.socket_state = 'Down'
