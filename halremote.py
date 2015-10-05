@@ -59,6 +59,7 @@ class HalRemoteComponent():
         self.threads = []
         self.shutdown = threading.Event()
         self.tx_lock = threading.Lock()
+        self.timer_lock = threading.Lock()
         self.debug = debug
 
         self.name = name
@@ -269,6 +270,7 @@ class HalRemoteComponent():
         self.update_state('Timeout')
 
     def start_halrcomp_heartbeat(self, interval):
+        self.timer_lock.acquire()
         if self.halrcomp_timer:
             self.halrcomp_timer.cancel()
 
@@ -277,18 +279,23 @@ class HalRemoteComponent():
             self.halrcomp_timer = threading.Timer(interval / 1000,
                                                   self.halrcomp_timer_tick)
             self.halrcomp_timer.start()
+        self.timer_lock.release()
 
     def stop_halrcomp_heartbeat(self):
+        self.timer_lock.acquire()
         if self.halrcomp_timer:
             self.halrcomp_timer.cancel()
             self.halrcomp_timer = None
+        self.timer_lock.release()
 
     def refresh_halrcomp_heartbeat(self):
+        self.timer_lock.acquire()
         if self.halrcomp_timer:
             self.halrcomp_timer.cancel()
             self.halrcomp_timer = threading.Timer(self.halrcomp_period / 1000,
                                                   self.halrcomp_timer_tick)
             self.halrcomp_timer.start()
+        self.timer_lock.release()
 
     def update_state(self, state):
         if state != self.state:

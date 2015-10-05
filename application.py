@@ -1,4 +1,3 @@
-import time
 import uuid
 import platform
 
@@ -6,6 +5,7 @@ import zmq
 import threading
 
 # protobuf
+from common import *
 from message_pb2 import Container
 from types_pb2 import *
 from status_pb2 import *
@@ -21,6 +21,7 @@ class ApplicationStatus():
         self.motion_lock = threading.Lock()
         self.task_lock = threading.Lock()
         self.interp_lock = threading.Lock()
+        self.timer_lock = threading.Lock()
         self.debug = debug
         self.is_ready = False
 
@@ -31,21 +32,26 @@ class ApplicationStatus():
         self.channels = set(['motion', 'config', 'io', 'task', 'interp'])
         self.running = False
 
+        # more efficient to reuse a protobuf message
+        self.rx = Container()
+
         # status containers, also used to expose data
-        self._io = EmcStatusIo()
-        self._config = EmcStatusConfig()
-        self._motion = EmcStatusMotion()
-        self._task = EmcStatusTask()
-        self._interp = EmcStatusInterp()
+        self.io_data = None
+        self.config_data = None
+        self.motion_data = None
+        self.task_data = None
+        self.interp_data = None
+        self.initialize_object('io')
+        self.initialize_object('config')
+        self.initialize_object('motion')
+        self.initialize_object('task')
+        self.initialize_object('interp')
 
         self.status_uri = ''
         self.status_period = 0
         self.status_timer = None
         self.subscriptions = set()
         self.synced_channels = set()
-
-        # more efficient to reuse a protobuf message
-        self.rx = Container()
 
         # ZeroMQ
         context = zmq.Context()
@@ -59,27 +65,27 @@ class ApplicationStatus():
     @property
     def io(self):
         with self.io_lock:
-            return self._io
+            return self.io_data
 
     @property
     def config(self):
         with self.config_lock:
-            return self._config
+            return self.config_data
 
     @property
     def motion(self):
         with self.motion_lock:
-            return self._motion
+            return self.motion_data
 
     @property
     def task(self):
         with self.task_lock:
-            return self._task
+            return self.task_data
 
     @property
     def interp(self):
         with self.interp_lock:
-            return self._interp
+            return self.interp_data
 
     def socket_worker(self):
         poll = zmq.Poller()
@@ -87,7 +93,7 @@ class ApplicationStatus():
 
         while not self.shutdown.is_set():
             s = dict(poll.poll(200))
-            if self.status_socket in s:
+            if self.status_socket in s and s[self.status_socket] == zmq.POLLIN:
                 self.process_status()
 
     def process_status(self):
@@ -147,26 +153,43 @@ class ApplicationStatus():
         else:
             print('[status] received unrecognized message type')
 
+    def initialize_object(self, channel):
+        if channel == 'io':
+            self.io_data = MessageObject()
+            recurse_descriptor(self.rx.emc_status_io.DESCRIPTOR, self.io_data)
+        elif channel == 'config':
+            self.config_data = MessageObject()
+            recurse_descriptor(self.rx.emc_status_config.DESCRIPTOR, self.config_data)
+        elif channel == 'motion':
+            self.motion_data = MessageObject()
+            recurse_descriptor(self.rx.emc_status_motion.DESCRIPTOR, self.motion_data)
+        elif channel == 'task':
+            self.task_data = MessageObject()
+            recurse_descriptor(self.rx.emc_status_task.DESCRIPTOR, self.task_data)
+        elif channel == 'interp':
+            self.interp_data = MessageObject()
+            recurse_descriptor(self.rx.emc_status_interp.DESCRIPTOR, self.interp_data)
+
     def update_motion(self, data):
         with self.motion_lock:
-            self._motion.MergeFrom(data)
+            recurse_message(data, self.motion_data)
 
     def update_config(self, data):
         with self.config_lock:
-            self._config.MergeFrom(data)
+            recurse_message(data, self.config_data)
 
     def update_io(self, data):
         with self.io_lock:
-            self._io.MergeFrom(data)
+            recurse_message(data, self.io_data)
 
     def update_task(self, data):
         with self.task_lock:
-            self._task.MergeFrom(data)
+            recurse_message(data, self.task_data)
             self.update_running()
 
     def update_interp(self, data):
         with self.interp_lock:
-            self._interp.MergeFrom(data)
+            recurse_message(data, self.interp_data)
             self.update_running()
 
     def update_sync(self, channel):
@@ -184,6 +207,7 @@ class ApplicationStatus():
         self.update_state('Timeout')
 
     def start_status_heartbeat(self, interval):
+        self.timer_lock.acquire()
         if self.status_timer:
             self.status_timer.cancel()
 
@@ -192,18 +216,23 @@ class ApplicationStatus():
             self.status_timer = threading.Timer(interval / 1000,
                                                 self.status_timer_tick)
             self.status_timer.start()
+        self.timer_lock.release()
 
     def refresh_status_heartbeat(self):
+        self.timer_lock.acquire()
         if self.status_timer:
             self.status_timer.cancel()
             self.status_timer = threading.Timer(self.status_period / 1000,
                                                 self.status_timer_tick)
             self.status_timer.start()
+        self.timer_lock.release()
 
     def stop_status_heartbeat(self):
+        self.timer_lock.acquire()
         if self.status_timer:
             self.status_timer.cancel()
             self.status_timer = None
+        self.timer_lock.release()
 
     def update_state(self, state):
         if state != self.state:
@@ -218,15 +247,15 @@ class ApplicationStatus():
                 self.status_period = 0  # stop heartbeat
                 if not state == 'Timeout':  # clear in case we have no timeout
                     with self.motion_lock:
-                        self._motion.Clear()
+                        self.initialize_object('motion')
                     with self.config_lock:
-                        self._config.Clear()
+                        self.initialize_object('config')
                     with self.io_lock:
-                        self._io.Clear()
+                        self.initialize_object('io')
                     with self.task_lock:
-                        self._task.Clear()
+                        self.initialize_object('task')
                     with self.interp_lock:
-                        self._interp.Clear()
+                        self.initialize_object('interp')
                 print('[status] disconnected')
 
     def subscribe(self):
@@ -243,26 +272,26 @@ class ApplicationStatus():
             self.status_socket.setsockopt(zmq.UNSUBSCRIBE, subscription)
             if subscription == 'motion':
                 with self.motion_lock:
-                    self._motion.Clear()
+                    self.initialize_object('motion')
             elif subscription == 'config':
                 with self.config_lock:
-                    self._config.Clear()
+                    self.initialize_object('config')
             elif subscription == 'io':
                 with self.io_lock:
-                    self._io.Clear()
+                    self.initialize_object('io')
             elif subscription == 'task':
                 with self.task_lock:
-                    self._task.Clear()
+                    self.initialize_object('lock')
             elif subscription == 'interp':
                 with self.interp_lock:
-                    self._interp.Clear()
+                    self.initialize_object('interp')
 
         self.subscriptions.clear()
 
     def update_running(self):
-        running = (self._task.task_mode == EMC_TASK_MODE_AUTO \
-                   or self._task.task_mode == EMC_TASK_MODE_MDI) \
-                   and self._interp.interp_state == EMC_TASK_INTERP_IDLE
+        running = (self.task_data.task_mode == EMC_TASK_MODE_AUTO \
+                   or self.task_data.task_mode == EMC_TASK_MODE_MDI) \
+                   and self.interp_data.interp_state == EMC_TASK_INTERP_IDLE
 
         self.running = running
 
@@ -309,29 +338,42 @@ class ApplicationStatus():
             self.start()
 
 
+INTERP_STATE_IDLE = EMC_TASK_INTERP_IDLE
+INTERP_STATE_READING = EMC_TASK_INTERP_READING
+INTERP_STATE_PAUSED = EMC_TASK_INTERP_PAUSED
+INTERP_STATE_WAITING = EMC_TASK_INTERP_WAITING
+
+MOTION_UNINITIALIZED = UNINITIALIZED_STATUS
+MOTION_DONE = RCS_DONE
+MOTION_EXEC = RCS_EXEC
+MOTION_ERROR = RCS_ERROR
+MOTION_RECEIVED = RCS_RECEIVED
+
+RELEASE_BRAKE = 0
+ENGAGE_BRAKE = 1
+
+JOG_STOP = 0
+JOG_CONTINUOUS = 1
+JOG_INCREMENT = 2
+
+SPINDLE_FORWARD = 0
+SPINDLE_REVERSE = 1
+SPINDLE_OFF = 2
+SPINDLE_DECREASE = 3
+SPINDLE_INCREASE = 4
+SPINDLE_CONSTANT = 5
+
+TASK_STATE_ESTOP = EMC_TASK_STATE_ESTOP
+TASK_STATE_ESTOP_RESET = EMC_TASK_STATE_ESTOP_RESET
+TASK_STATE_OFF = EMC_TASK_STATE_OFF
+TASK_STATE_ON = EMC_TASK_STATE_ON
+
+TASK_MODE_MANUAL = EMC_TASK_MODE_MANUAL
+TASK_MODE_AUTO = EMC_TASK_MODE_AUTO
+TASK_MODE_MDI = EMC_TASK_MODE_MDI
+
+
 class ApplicationCommand():
-    RELEASE_BRAKE = 0
-    ENGAGE_BRAKE = 1
-
-    STOP_JOG = 0
-    CONTINOUS_JOG = 1
-    INCREMENT_JOG = 2
-
-    SPINDLE_FORWARD = 0
-    SPINDLE_REVERSE = 1
-    SPINDLE_OFF = 2
-    SPINDLE_DECREASE = 3
-    SPINDLE_INCREASE = 4
-    SPINDLE_CONSTANT = 5
-
-    TASK_STATE_ESTOP = EMC_TASK_STATE_ESTOP
-    TASK_STATE_ESTOP_RESET = EMC_TASK_STATE_ESTOP_RESET
-    TASK_STATE_OFF = EMC_TASK_STATE_OFF
-    TASK_STATE_ON = EMC_TASK_STATE_ON
-
-    TASK_MODE_MANUAL = EMC_TASK_MODE_MANUAL
-    TASK_MODE_AUTO = EMC_TASK_MODE_AUTO
-    TASK_MODE_MDI = EMC_TASK_MODE_MDI
 
     def __init__(self, debug=False):
         self.threads = []
@@ -395,12 +437,12 @@ class ApplicationCommand():
                 self.command_state = 'Up'
                 self.update_state('Connected')
 
-            elif self.rx.type == MT_ERROR:
-                self.update_error('Service', self.rx.note)
-                # should we disconnect here?
+        elif self.rx.type == MT_ERROR:
+            self.update_error('Service', self.rx.note)
+            # should we disconnect here?
 
-            else:
-                print('[command] received unsupported message')
+        else:
+            print('[command] received unsupported message')
 
     def start(self):
         self.command_state = 'Trying'
@@ -487,7 +529,7 @@ class ApplicationCommand():
             self.heartbeat_timer.cancel()
             self.heartbeat_timer = None
 
-    def abort(self, interpreter):
+    def abort(self, interpreter='execute'):
         if not self.connected:
             return
 
@@ -496,7 +538,7 @@ class ApplicationCommand():
 
             self.send_command_msg(MT_EMC_TASK_ABORT)
 
-    def run_program(self, interpreter, line_number):
+    def run_program(self, line_number, interpreter='execute'):
         if not self.connected:
             return
 
@@ -507,7 +549,7 @@ class ApplicationCommand():
 
             self.send_command_msg(MT_EMC_TASK_PLAN_RUN)
 
-    def pause_program(self, interpreter):
+    def pause_program(self, interpreter='execute'):
         if not self.connected:
             return
 
@@ -516,7 +558,7 @@ class ApplicationCommand():
 
             self.send_command_msg(MT_EMC_TASK_PLAN_PAUSE)
 
-    def step_program(self, interpreter):
+    def step_program(self, interpreter='execute'):
         if not self.connected:
             return
 
@@ -525,7 +567,7 @@ class ApplicationCommand():
 
             self.send_command_msg(MT_EMC_TASK_PLAN_STEP)
 
-    def resume_program(self, interpreter):
+    def resume_program(self, interpreter='execute'):
         if not self.connected:
             return
 
@@ -534,7 +576,7 @@ class ApplicationCommand():
 
             self.send_command_msg(MT_EMC_TASK_RESUME)
 
-    def reset_program(self, interpreter):
+    def reset_program(self, interpreter='execute'):
         if not self.connected:
             return
 
@@ -543,7 +585,7 @@ class ApplicationCommand():
 
             self.send_command_msg(MT_EMC_TASK_PLAN_INIT)
 
-    def set_task_mode(self, interpreter, mode):
+    def set_task_mode(self, mode, interpreter='execute'):
         if not self.connected:
             return
 
@@ -554,7 +596,7 @@ class ApplicationCommand():
 
             self.send_command_msg(MT_EMC_TASK_SET_MODE)
 
-    def set_task_state(self, interpreter, state):
+    def set_task_state(self, state, interpreter='execute'):
         if not self.connected:
             return
 
@@ -565,7 +607,7 @@ class ApplicationCommand():
 
             self.send_command_msg(MT_EMC_TASK_SET_STATE)
 
-    def open_program(self, interpreter, file_name):
+    def open_program(self, file_name, interpreter='execute'):
         if not self.connected:
             return
 
@@ -576,7 +618,7 @@ class ApplicationCommand():
 
             self.send_command_msg(MT_EMC_TASK_PLAN_OPEN)
 
-    def execute_mdi(self, interpreter, command):
+    def execute_mdi(self, command, interpreter='execute'):
         if not self.connected:
             return
 
@@ -592,9 +634,9 @@ class ApplicationCommand():
             return
 
         with self.tx_lock:
-            if brake == self.ENGAGE_BRAKE:
+            if brake == ENGAGE_BRAKE:
                 self.send_command_msg(MT_EMC_SPINDLE_BRAKE_ENGAGE)
-            elif brake == self.RELEASE_BRAKE:
+            elif brake == RELEASE_BRAKE:
                 self.send_command_msg(MT_EMC_SPINDLE_BRAKE_RELEASE)
 
     def set_debug_level(self, debug_level):
@@ -647,12 +689,12 @@ class ApplicationCommand():
             params.index = axis
 
             cmd_type = None
-            if jog_type == self.STOP_JOG:
+            if jog_type == JOG_STOP:
                 cmd_type = MT_EMC_AXIS_ABORT
-            elif jog_type == self.CONTINOUS_JOG:
+            elif jog_type == JOG_CONTINUOUS:
                 cmd_type = MT_EMC_AXIS_JOG
                 params.velocity = velocity
-            elif jog_type == self.INCREMENT_JOG:
+            elif jog_type == JOG_INCREMENT:
                 cmd_type = MT_EMC_AXIS_INCR_JOG
                 params.velocity = velocity
                 params.distance = distance
@@ -807,19 +849,19 @@ class ApplicationCommand():
         with self.tx_lock:
             mode_type = None
             params = self.tx.emc_command_params
-            if mode == self.SPINDLE_FORWARD:
+            if mode == SPINDLE_FORWARD:
                 mode_type = MT_EMC_SPINDLE_ON
                 params.velocity = velocity
-            elif mode == self.SPINDLE_REVERSE:
+            elif mode == SPINDLE_REVERSE:
                 mode_type = MT_EMC_SPINDLE_ON
                 params.velocity = velocity * -1.0
-            elif mode == self.SPINDLE_OFF:
+            elif mode == SPINDLE_OFF:
                 mode_type = MT_EMC_SPINDLE_OFF
-            elif mode == self.SPINDLE_INCREASE:
+            elif mode == SPINDLE_INCREASE:
                 mode_type = MT_EMC_SPINDLE_INCREASE
-            elif mode == self.SPINDLE_DECREASE:
+            elif mode == SPINDLE_DECREASE:
                 mode_type = MT_EMC_SPINDLE_DECRESE
-            elif mode == self.SPINDLE_CONSTANT:
+            elif mode == SPINDLE_CONSTANT:
                 mode_type = MT_EMC_SPINDLE_CONSTANT
             else:
                 self.tx.Clear()
@@ -921,6 +963,7 @@ class ApplicationError():
         self.threads = []
         self.shutdown = threading.Event()
         self.message_lock = threading.Lock()
+        self.timer_lock = threading.Lock()
         self.debug = debug
         self.is_ready = False
 
@@ -1006,6 +1049,7 @@ class ApplicationError():
         self.update_state('Timeout')
 
     def start_error_heartbeat(self, interval):
+        self.timer_lock.acquire()
         if self.heartbeat_timer:
             self.heartbeat_timer.cancel()
 
@@ -1014,18 +1058,23 @@ class ApplicationError():
             self.heartbeat_timer = threading.Timer(interval / 1000,
                                                self.heartbeat_timer_tick)
             self.heartbeat_timer.start()
+        self.timer_lock.release()
 
     def refresh_error_heartbeat(self):
+        self.timer_lock.acquire()
         if self.heartbeat_timer:
             self.heartbeat_timer.cancel()
             self.heartbeat_timer = threading.Timer(self.heartbeat_period / 1000,
                                                    self.heartbeat_timer_tick)
             self.heartbeat_timer.start()
+        self.timer_lock.release()
 
     def stop_error_heartbeat(self):
+        self.timer_lock.acquire()
         if self.heartbeat_timer:
             self.heartbeat_timer.cancel()
             self.heartbeat_timer = None
+        self.timer_lock.release()
 
     def update_state(self, state):
         if state != self.state:
