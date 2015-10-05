@@ -201,8 +201,8 @@ class TestClass():
         status.clear()
         status.border(0)
         status.addstr(1, 2, 'Status')
-        status.addstr(3, 4, 'Estop: %s' % str(self.status.task.task_state == application.EMC_TASK_STATE_ESTOP))
-        status.addstr(4, 4, 'Power: %s' % str(self.status.task.task_state == application.EMC_TASK_STATE_ON))
+        status.addstr(3, 4, 'Estop: %s' % str(self.status.task.task_state == application.TASK_STATE_ESTOP))
+        status.addstr(4, 4, 'Power: %s' % str(self.status.task.task_state == application.TASK_STATE_ON))
         status.refresh()
 
         cmd = self.command_window
@@ -229,15 +229,15 @@ class TestClass():
         self.screen.nodelay(True)
         c = self.screen.getch()
         if c == curses.KEY_F1:
-            if self.status.task.task_state == application.EMC_TASK_STATE_ESTOP:
-                self.command.set_task_state('execute', ApplicationCommand.TASK_STATE_ESTOP_RESET)
+            if self.status.task.task_state == application.TASK_STATE_ESTOP:
+                self.command.set_task_state(application.TASK_STATE_ESTOP_RESET)
             else:
-                self.command.set_task_state('execute', ApplicationCommand.TASK_STATE_ESTOP)
+                self.command.set_task_state(application.TASK_STATE_ESTOP)
         elif c == curses.KEY_F2:
-            if self.status.task.task_state == application.EMC_TASK_STATE_ON:
-                self.command.set_task_state('execute', ApplicationCommand.TASK_STATE_OFF)
+            if self.status.task.task_state == application.TASK_STATE_ON:
+                self.command.set_task_state(application.TASK_STATE_OFF)
             else:
-                self.command.set_task_state('execute', ApplicationCommand.TASK_STATE_ON)
+                self.command.set_task_state(application.TASK_STATE_ON)
 
     def stop(self):
         if self.halrcomp is not None:
