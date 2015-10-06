@@ -62,30 +62,30 @@ class TestClass():
         self.error = ApplicationError()
 
         halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)
-        halrcmd_sd.discovered_callback = self.halrcmd_discovered
+        halrcmd_sd.on_discovered.append(self.halrcmd_discovered)
         halrcmd_sd.start()
         #halrcmd_sd.disappered_callback = disappeared
         self.halrcmd_sd = halrcmd_sd
 
         halrcomp_sd = ServiceDiscovery(service_type="_halrcomp._sub._machinekit._tcp", uuid=uuid)
-        halrcomp_sd.discovered_callback = self.halrcomp_discovered
+        halrcomp_sd.on_discovered.append(self.halrcomp_discovered)
         halrcomp_sd.start()
         self.harcomp_sd = halrcomp_sd
 
         status_sd = ServiceDiscovery(service_type="_status._sub._machinekit._tcp", uuid=uuid)
-        status_sd.discovered_callback = self.status_discovered
-        status_sd.disappeared_callback = self.status_disappeared
+        status_sd.on_discovered.append(self.status_discovered)
+        status_sd.on_disappeared.append(self.status_disappeared)
         status_sd.start()
         self.status_sd = status_sd
 
         command_sd = ServiceDiscovery(service_type="_command._sub._machinekit._tcp", uuid=uuid)
-        command_sd.discovered_callback = self.command_discovered
-        command_sd.disappeared_callback = self.command_disappeared
+        command_sd.on_discovered.append(self.command_discovered)
+        command_sd.on_disappeared.append(self.command_disappeared)
         command_sd.start()
 
         error_sd = ServiceDiscovery(service_type="_error._sub._machinekit._tcp", uuid=uuid)
-        error_sd.discovered_callback = self.error_discovered
-        error_sd.disappeared_callback = self.error_disappeared
+        error_sd.on_discovered.append(self.error_discovered)
+        error_sd.on_disappeared.append(self.error_disappeared)
         error_sd.start()
 
         self.timer = None

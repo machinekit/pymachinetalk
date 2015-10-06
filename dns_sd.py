@@ -19,8 +19,11 @@ class ServiceTypeDatabase:
 
 class ServiceDiscovery():
     def __init__(self, service_type, uuid='', interface='', debug=False):
-        self.discovered_callback = None
-        self.disappeared_callback = None
+        # callbacks
+        self.on_discovered = []
+        self.on_disappeared = []
+        self.on_error = []
+
         self.server = None
         # Start Service Discovery
         self.debug = debug
@@ -80,13 +83,14 @@ class ServiceDiscovery():
             self.service_names.append(name)
             if self.debug:
                 print('discovered: %s %s' % (name, dsn))
-            if self.discovered_callback:
-                # dsn = dsn.replace(host, address)
-                self.discovered_callback(name, dsn)
+            for func in self.on_discovered:
+                func(name, dsn)
 
     def print_error(self, err):
-        # FIXME we should use notifications
-        print "Error:", str(err)
+        if self.debug:
+            print("SD Error: %s" % str(err))
+        for func in self.on_error:
+            func(str(err))
 
     def new_service(self, interface, protocol, name, servicetype, domain, flags):
         del flags
@@ -110,8 +114,8 @@ class ServiceDiscovery():
             self.service_names.remove(name)
             if self.debug:
                 print("disappered: %s" % name)
-            if self.disappeared_callback:
-                self.disappeared_callback(name)
+            for func in self.on_disappeared:
+                func(name)
 
     def add_service_type(self, interface, protocol, servicetype, domain):
         # Are we already browsing this domain for this type?

@@ -25,6 +25,10 @@ class ApplicationStatus():
         self.debug = debug
         self.is_ready = False
 
+        # callbacks
+        self.on_synced_changed = []
+        self.on_connected_changed = []
+
         self.synced = False
         self.connected = False
         self.state = 'Disconnected'
@@ -197,10 +201,14 @@ class ApplicationStatus():
 
         if self.synced_channels == self.channels:
             self.synced = True
+            for func in self.on_synced_changed:
+                func(True)
 
     def clear_sync(self):
         self.synced = False
         self.synced_channels.clear()
+        for func in self.on_synced_changed:
+            func(True)
 
     def status_timer_tick(self):
         self.status_state = 'Down'
@@ -240,6 +248,8 @@ class ApplicationStatus():
             if state == 'Connected':
                 self.connected = True
                 print('[status] connected')
+                for func in self.on_connected_changed:
+                    func(True)
             elif self.connected:
                 self.connected = False
                 self.stop_status_heartbeat()
@@ -257,6 +267,8 @@ class ApplicationStatus():
                     with self.interp_lock:
                         self.initialize_object('interp')
                 print('[status] disconnected')
+                for func in self.on_connected_changed:
+                    func(False)
 
     def subscribe(self):
         self.status_state = 'Trying'
@@ -392,6 +404,9 @@ class ApplicationCommand():
         self.debug = debug
         self.is_ready = False
 
+        # callbacks
+        self.on_connected_changed = []
+
         self.connected = False
         self.state = 'Disconnected'
         self.command_state = 'Down'
@@ -502,9 +517,13 @@ class ApplicationCommand():
             if state == 'Connected':
                 self.connected = True
                 print('[command] connected')
+                for func in self.on_connected_changed:
+                    func(True)
             elif self.connected:
                 self.connected = False
                 print('[command] disconnected')
+                for func in self.on_connected_changed:
+                    func(False)
 
     def update_error(self, error, description):
         print('[command] error: %s %s' % (error, description))
@@ -977,6 +996,9 @@ class ApplicationError():
         self.debug = debug
         self.is_ready = False
 
+        # callbacks
+        self.on_connected_changed = []
+
         self.connected = False
         self.state = 'Disconnected'
         self.socket_state = 'Down'
@@ -1092,10 +1114,14 @@ class ApplicationError():
             if state == 'Connected':
                 self.connected = True
                 print('[error] connected')
+                for func in self.on_connected_changed:
+                    func(True)
             elif self.connected:
                 self.connected = False
                 self.stop_error_heartbeat()
                 print('[error] disconnected')
+                for func in self.on_connected_changed:
+                    func(False)
 
     def subscribe(self):
         self.socket_state = 'Trying'

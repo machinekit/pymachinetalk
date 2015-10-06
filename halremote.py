@@ -24,6 +24,9 @@ class HalPin():
         self.parent = None
         self.lock = threading.Lock()
 
+        # callbacks
+        self.on_synced_changed = []
+
     @property
     def value(self):
         with self.lock:
@@ -42,7 +45,10 @@ class HalPin():
     @synced.setter
     def synced(self, value):
         with self.lock:
-            self._synced = value
+            if value != self._synced:
+                self._synced = value
+                for func in self.on_synced_changed:
+                    func(value)
 
     def set(self, value):
         self.value = value
@@ -61,6 +67,9 @@ class HalRemoteComponent():
         self.tx_lock = threading.Lock()
         self.timer_lock = threading.Lock()
         self.debug = debug
+
+        # callbacks
+        self.on_connected_changed = []
 
         self.name = name
         self.pinsbyname = {}
@@ -303,10 +312,14 @@ class HalRemoteComponent():
             if state == 'Connected':
                 self.connected = True
                 print('[%s] connected' % self.name)
+                for func in self.on_connected_changed:
+                    func(self.connected)
             elif self.connected:
                 self.connected = False
                 self.stop_halrcomp_heartbeat()
                 print('[%s] disconnected' % self.name)
+                for func in self.on_connected_changed:
+                    func(self.connected)
 
     def update_error(self, error, description):
         print('[%s] error: %s %s' % (self.name, error, description))
