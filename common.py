@@ -2,13 +2,20 @@
 
 class MessageObject():
     def __init__(self):
-        pass
+        self.is_position = False
 
     def __str__(self):
         output = ''
         for attr in dir(self)[3:]:
             output += '%s: %s\n' % (attr, getattr(self, attr))
         return output
+
+    def __getitem__(self, index):
+        if self.is_position:
+            mapping = ['x', 'y', 'z', 'a', 'b', 'c', 'u', 'v', 'w']
+            return getattr(self, mapping[index])
+        else:
+            raise RuntimeError("Object does not support indexed access")
 
 
 def recurse_descriptor(descriptor, obj):
@@ -31,7 +38,10 @@ def recurse_descriptor(descriptor, obj):
             value = 0
         elif field.type == field.TYPE_MESSAGE:
             value = MessageObject()
-            recurse_descriptor(field.message_type, value)
+            msg_descriptor = field.message_type
+            if msg_descriptor.name == 'Position':
+                value.is_position = True
+            recurse_descriptor(msg_descriptor, value)
 
         if field.label == field.LABEL_REPEATED:
             delattr(value, 'index')
