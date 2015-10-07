@@ -260,7 +260,7 @@ class ApplicationStatus():
         self.synced = False
         self.synced_channels.clear()
         for func in self.on_synced_changed:
-            func(True)
+            func(False)
 
     def status_timer_tick(self):
         self.status_state = 'Down'
@@ -610,7 +610,7 @@ class ApplicationCommand():
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_RESUME)
+            self.send_command_msg(MT_EMC_TASK_PLAN_RESUME)
 
     def reset_program(self, interpreter='execute'):
         if not self.connected:
