@@ -407,6 +407,9 @@ class ApplicationCommand():
     def __init__(self, debug=False):
         self.threads = []
         self.shutdown_event = threading.Event()
+        self.completed_condition = threading.Condition(threading.Lock())
+        self.executed_condition = threading.Condition(threading.Lock())
+        self.connected_condition = threading.Condition(threading.Lock())
         self.tx_lock = threading.Lock()
         self.debug = debug
         self.is_ready = False
@@ -423,6 +426,11 @@ class ApplicationCommand():
         self.ping_error_count = 0
         self.ping_error_threshold = 2
         self.heartbeat_timer = None
+        self.ticket = 1  # stores the local ticket number
+        self.executed_ticket = 0  # last tick number from executed feedback
+        self.completed_ticket = 0  # last tick number from executed feedback
+        self.executed_updated = False
+        self.completed_updated = False
 
         # more efficient to reuse a protobuf message
         self.rx = Container()
@@ -439,12 +447,17 @@ class ApplicationCommand():
         self.sockets_connected = False
 
     def send_command_msg(self, msg_type):
+        ticket = self.ticket
         self.tx.type = msg_type
+        if msg_type != MT_PING:  # no need to add a ticket to a ping
+            self.tx.ticket = ticket  # add the ticket serial number
+            self.ticket += 1
         if self.debug:
             print('[command] sending message: %s' % msg_type)
             print(str(self.tx))
         self.command_socket.send(self.tx.SerializeToString(), zmq.NOBLOCK)
         self.tx.Clear()
+        return ticket
 
     def socket_worker(self):
         poll = zmq.Poller()
@@ -473,8 +486,53 @@ class ApplicationCommand():
             self.update_error('Service', self.rx.note)
             # should we disconnect here?
 
+        elif self.rx.type == MT_EMCCMD_EXECUTED:
+            with self.executed_condition:
+                self.executed_ticket = self.rx.reply_ticket
+                self.executed_updated = True
+                self.executed_condition.notify()
+
+        elif self.rx.type == MT_EMCCMD_COMPLETED:
+            with self.completed_condition:
+                self.completed_ticket = self.rx.reply_ticket
+                self.completed_updated = True
+                self.completed_condition.notify()
+
         else:
             print('[command] received unsupported message')
+
+    def wait_executed(self, ticket=None, timeout=None):
+        with self.executed_condition:
+            if ticket and ticket <= self.executed_ticket:  # very likely that we already received the reply
+                return True
+
+            while True:
+                self.executed_updated = False
+                self.executed_condition.wait(timeout=timeout)
+                if not self.executed_updated:
+                    return False  # timeout
+                if ticket is None or ticket == self.executed_ticket:
+                    return True
+
+    def wait_completed(self, ticket=None, timeout=None):
+        with self.completed_condition:
+            if ticket and ticket < self.completed_ticket:  # very likely that we already received the reply
+                return True
+
+            while True:
+                self.completed_updated = False
+                self.completed_condition.wait(timeout=timeout)
+                if not self.completed_updated:
+                    return False  # timeout
+                if ticket is None or ticket == self.completed_ticket:
+                    return True
+
+    def wait_connected(self, timeout=None):
+        with self.connected_condition:
+            if self.connected:
+                return True
+            self.connected_condition.wait(timeout=timeout)
+            return self.connected
 
     def start(self):
         self.command_state = 'Trying'
@@ -522,12 +580,16 @@ class ApplicationCommand():
         if state != self.state:
             self.state = state
             if state == 'Connected':
-                self.connected = True
+                with self.connected_condition:
+                    self.connected = True
+                    self.connected_condition.notify()
                 print('[command] connected')
                 for func in self.on_connected_changed:
                     func(True)
             elif self.connected:
-                self.connected = False
+                with self.connected_condition:
+                    self.connected = False
+                    self.connected_condition.notify()
                 print('[command] disconnected')
                 for func in self.on_connected_changed:
                     func(False)
@@ -567,59 +629,59 @@ class ApplicationCommand():
 
     def abort(self, interpreter='execute'):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_ABORT)
+            return self.send_command_msg(MT_EMC_TASK_ABORT)
 
     def run_program(self, line_number, interpreter='execute'):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.line_number = line_number
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_PLAN_RUN)
+            return self.send_command_msg(MT_EMC_TASK_PLAN_RUN)
 
     def pause_program(self, interpreter='execute'):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_PLAN_PAUSE)
+            return self.send_command_msg(MT_EMC_TASK_PLAN_PAUSE)
 
     def step_program(self, interpreter='execute'):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_PLAN_STEP)
+            return self.send_command_msg(MT_EMC_TASK_PLAN_STEP)
 
     def resume_program(self, interpreter='execute'):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_PLAN_RESUME)
+            return self.send_command_msg(MT_EMC_TASK_PLAN_RESUME)
 
     def reset_program(self, interpreter='execute'):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_PLAN_INIT)
+            return self.send_command_msg(MT_EMC_TASK_PLAN_INIT)
 
     def set_task_mode(self, mode, interpreter='execute'):
         if not self.connected:
@@ -630,95 +692,95 @@ class ApplicationCommand():
             params.task_mode = mode
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_SET_MODE)
+            return self.send_command_msg(MT_EMC_TASK_SET_MODE)
 
     def set_task_state(self, state, interpreter='execute'):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.task_state = state
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_SET_STATE)
+            return self.send_command_msg(MT_EMC_TASK_SET_STATE)
 
     def open_program(self, file_name, interpreter='execute'):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.path = file_name
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_PLAN_OPEN)
+            return self.send_command_msg(MT_EMC_TASK_PLAN_OPEN)
 
     def execute_mdi(self, command, interpreter='execute'):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.command = command
             self.tx.interp_name = interpreter
 
-            self.send_command_msg(MT_EMC_TASK_PLAN_EXECUTE)
+            return self.send_command_msg(MT_EMC_TASK_PLAN_EXECUTE)
 
     def set_spindle_brake(self, brake):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             if brake == ENGAGE_BRAKE:
-                self.send_command_msg(MT_EMC_SPINDLE_BRAKE_ENGAGE)
+                return self.send_command_msg(MT_EMC_SPINDLE_BRAKE_ENGAGE)
             elif brake == RELEASE_BRAKE:
-                self.send_command_msg(MT_EMC_SPINDLE_BRAKE_RELEASE)
+                return self.send_command_msg(MT_EMC_SPINDLE_BRAKE_RELEASE)
 
     def set_debug_level(self, debug_level):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.debug_level = debug_level
             self.tx.interp_name = debug_level
 
-            self.send_command_msg(MT_EMC_SET_DEBUG)
+            return self.send_command_msg(MT_EMC_SET_DEBUG)
 
     def set_feed_override(self, scale):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.scale = scale
 
-            self.send_command_msg(MT_EMC_TRAJ_SET_SCALE)
+            return self.send_command_msg(MT_EMC_TRAJ_SET_SCALE)
 
     def set_flood_enabled(self, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             if enable:
-                self.send_command_msg(MT_EMC_COOLANT_FLOOD_ON)
+                return self.send_command_msg(MT_EMC_COOLANT_FLOOD_ON)
             else:
-                self.send_command_msg(MT_EMC_COOLANT_FLOOD_OFF)
+                return self.send_command_msg(MT_EMC_COOLANT_FLOOD_OFF)
 
     def home_axis(self, index):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.index = index
 
-            self.send_command_msg(MT_EMC_AXIS_HOME)
+            return self.send_command_msg(MT_EMC_AXIS_HOME)
 
     def jog(self, jog_type, axis, velocity=0.0, distance=0.0):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
@@ -736,120 +798,120 @@ class ApplicationCommand():
                 params.distance = distance
             else:
                 self.tx.Clear()
-                return
+                return None
 
-            self.send_command_msg(cmd_type)
+            return self.send_command_msg(cmd_type)
 
     def load_tool_table(self):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
-            self.send_command_msg(MT_EMC_TOOL_LOAD_TOOL_TABLE)
+            return self.send_command_msg(MT_EMC_TOOL_LOAD_TOOL_TABLE)
 
     def set_maximum_velocity(self, velocity):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.velocity = velocity
 
-            self.send_command_msg(MT_EMC_TRAJ_SET_MAX_VELOCITY)
+            return self.send_command_msg(MT_EMC_TRAJ_SET_MAX_VELOCITY)
 
     def set_mist_enabled(self, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             if enable:
-                self.send_command_msg(MT_EMC_COOLANT_MIST_ON)
+                return self.send_command_msg(MT_EMC_COOLANT_MIST_ON)
             else:
-                self.send_command_msg(MT_EMC_COOLANT_MIST_OFF)
+                return self.send_command_msg(MT_EMC_COOLANT_MIST_OFF)
 
     def override_limits(self):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
-            self.send_command_msg(MT_EMC_AXIS_OVERRIDE_LIMITS)
+            return self.send_command_msg(MT_EMC_AXIS_OVERRIDE_LIMITS)
 
     def set_adaptive_feed_enabled(self, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.enable = enable
 
-            self.send_command_msg(MT_EMC_MOTION_ADAPTIVE)
+            return self.send_command_msg(MT_EMC_MOTION_ADAPTIVE)
 
     def set_analog_output(self, index, value):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.index = index
             params.value = value
 
-            self.send_command_msg(MT_EMC_MOTION_SET_AOUT)
+            return self.send_command_msg(MT_EMC_MOTION_SET_AOUT)
 
     def set_block_delete_enabled(self, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.enable = enable
 
-            self.send_command_msg(MT_EMC_TASK_PLAN_SET_BLOCK_DELETE)
+            return self.send_command_msg(MT_EMC_TASK_PLAN_SET_BLOCK_DELETE)
 
     def set_digital_output(self, index, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.index = index
             params.enable = enable
 
-            self.send_command_msg(MT_EMC_MOTION_SET_DOUT)
+            return self.send_command_msg(MT_EMC_MOTION_SET_DOUT)
 
     def set_feed_hold_enabled(self, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.enable = enable
 
-            self.send_command_msg(MT_EMC_TRAJ_SET_FH_ENABLE)
+            return self.send_command_msg(MT_EMC_TRAJ_SET_FH_ENABLE)
 
     def set_feed_override_enabled(self, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.enable = enable
 
-            self.send_command_msg(MT_EMC_TRAJ_SET_FO_ENABLE)
+            return self.send_command_msg(MT_EMC_TRAJ_SET_FO_ENABLE)
 
     def set_axis_max_position_limit(self, axis, value):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.index = axis
             params.value = value
 
-            self.send_command_msg(MT_EMC_AXIS_SET_MAX_POSITION_LIMIT)
+            return self.send_command_msg(MT_EMC_AXIS_SET_MAX_POSITION_LIMIT)
 
     def set_axis_min_position_limit(self, axis, value):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
@@ -860,27 +922,27 @@ class ApplicationCommand():
 
     def set_optional_stop_enabled(self, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.enable = enable
 
-            self.send_command_msg(MT_EMC_TASK_PLAN_SET_OPTIONAL_STOP)
+            return self.send_command_msg(MT_EMC_TASK_PLAN_SET_OPTIONAL_STOP)
 
     def set_spindle_override_enabled(self, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.enable = enable
 
-            self.send_command_msg(MT_EMC_TRAJ_SET_SO_ENABLE)
+            return self.send_command_msg(MT_EMC_TRAJ_SET_SO_ENABLE)
 
     def set_spindle(self, mode, velocity=0.0):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             mode_type = None
@@ -901,33 +963,33 @@ class ApplicationCommand():
                 mode_type = MT_EMC_SPINDLE_CONSTANT
             else:
                 self.tx.Clear()
-                return
+                return None
 
-            self.send_command_msg(mode_type)
+            return self.send_command_msg(mode_type)
 
     def set_spindle_override(self, scale):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.scale = scale
 
-            self.send_command_msg(MT_EMC_TRAJ_SET_SPINDLE_SCALE)
+            return self.send_command_msg(MT_EMC_TRAJ_SET_SPINDLE_SCALE)
 
     def set_teleop_enabled(self, enable):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.enable = enable
 
-            self.send_command_msg(MT_EMC_TRAJ_SET_TELEOP_ENABLE)
+            return self.send_command_msg(MT_EMC_TRAJ_SET_TELEOP_ENABLE)
 
     def set_teleop_vector(self, a, b, c, u, v, w):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
@@ -939,11 +1001,11 @@ class ApplicationCommand():
             pose.v = v
             pose.w = w
 
-            self.send_command_msg(MT_EMC_TRAJ_SET_TELEOP_VECTOR)
+            return self.send_command_msg(MT_EMC_TRAJ_SET_TELEOP_VECTOR)
 
     def set_tool_offset(self, index, zoffset, xoffset, diameter, frontangle, backangle, orientation):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
@@ -956,34 +1018,34 @@ class ApplicationCommand():
             tooldata.backangle = backangle
             tooldata.orientation = orientation
 
-            self.send_command_msg(MT_EMC_TOOL_SET_OFFSET)
+            return self.send_command_msg(MT_EMC_TOOL_SET_OFFSET)
 
     def set_trajectory_mode(self, mode):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.traj_mode = mode
 
-            self.send_command_msg(MT_EMC_TRAJ_SET_MODE)
+            return self.send_command_msg(MT_EMC_TRAJ_SET_MODE)
 
     def unhome_axis(self, index):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
             params = self.tx.emc_command_params
             params.index = index
 
-            self.send_command_msg(MT_EMC_AXIS_UNHOME)
+            return self.send_command_msg(MT_EMC_AXIS_UNHOME)
 
     def shutdown(self):
         if not self.connected:
-            return
+            return None
 
         with self.tx_lock:
-            self.send_command_msg(MT_SHUTDOWN)
+            return self.send_command_msg(MT_SHUTDOWN)
 
 
 class ApplicationError():
