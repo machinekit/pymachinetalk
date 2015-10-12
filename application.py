@@ -68,12 +68,14 @@ class ApplicationStatus():
     def __init__(self, debug=False):
         self.threads = []
         self.shutdown = threading.Event()
-        self.config_lock = threading.Lock()
-        self.io_lock = threading.Lock()
-        self.motion_lock = threading.Lock()
-        self.task_lock = threading.Lock()
-        self.interp_lock = threading.Lock()
         self.timer_lock = threading.Lock()
+        self.config_condition = threading.Condition(threading.Lock())
+        self.io_condition = threading.Condition(threading.Lock())
+        self.motion_condition = threading.Condition(threading.Lock())
+        self.task_condition = threading.Condition(threading.Lock())
+        self.interp_condition = threading.Condition(threading.Lock())
+        self.connected_condition = threading.Condition(threading.Lock())
+        self.synced_condition = threading.Condition(threading.Lock())
         self.debug = debug
         self.is_ready = False
 
@@ -120,28 +122,62 @@ class ApplicationStatus():
     # should we return a copy instead of the reference?
     @property
     def io(self):
-        with self.io_lock:
+        with self.io_condition:
             return self.io_data
 
     @property
     def config(self):
-        with self.config_lock:
+        with self.config_condition:
             return self.config_data
 
     @property
     def motion(self):
-        with self.motion_lock:
+        with self.motion_condition:
             return self.motion_data
 
     @property
     def task(self):
-        with self.task_lock:
+        with self.task_condition:
             return self.task_data
 
     @property
     def interp(self):
-        with self.interp_lock:
+        with self.interp_condition:
             return self.interp_data
+
+    def wait_connected(self, timeout=None):
+        with self.connected_condition:
+            if self.connected:
+                return True
+            self.connected_condition.wait(timeout=timeout)
+            return self.connected
+
+    def wait_synced(self, timeout=None):
+        with self.synced_condition:
+            if self.synced:
+                return True
+            self.synced_condition.wait(timeout=timeout)
+            return self.synced
+
+    def wait_config_updated(self, timeout=None):
+        with self.config_condition:
+            self.config_condition.wait(timeout=timeout)
+
+    def wait_io_updated(self, timeout=None):
+        with self.io_condition:
+            self.io_condition.wait(timeout=timeout)
+
+    def wait_motion_updated(self, timeout=None):
+        with self.motion_condition:
+            self.motion_condition.wait(timeout=timeout)
+
+    def wait_task_updated(self, timeout=None):
+        with self.task_condition:
+            self.task_condition.wait(timeout=timeout)
+
+    def wait_interp_updated(self, timeout=None):
+        with self.interp_condition:
+            self.interp_condition.wait(timeout=timeout)
 
     def socket_worker(self):
         poll = zmq.Poller()
@@ -227,37 +263,46 @@ class ApplicationStatus():
             recurse_descriptor(self.rx.emc_status_interp.DESCRIPTOR, self.interp_data)
 
     def update_motion(self, data):
-        with self.motion_lock:
+        with self.motion_condition:
             recurse_message(data, self.motion_data)
+            self.motion_condition.notify()
 
     def update_config(self, data):
-        with self.config_lock:
+        with self.config_condition:
             recurse_message(data, self.config_data)
+            self.config_condition.notify()
 
     def update_io(self, data):
-        with self.io_lock:
+        with self.io_condition:
             recurse_message(data, self.io_data)
+            self.io_condition.notify()
 
     def update_task(self, data):
-        with self.task_lock:
+        with self.task_condition:
             recurse_message(data, self.task_data)
             self.update_running()
+            self.task_condition.notify()
 
     def update_interp(self, data):
-        with self.interp_lock:
+        with self.interp_condition:
             recurse_message(data, self.interp_data)
             self.update_running()
+            self.interp_condition.notify()
 
     def update_sync(self, channel):
         self.synced_channels.add(channel)
 
         if self.synced_channels == self.channels:
-            self.synced = True
+            with self.synced_condition:
+                self.synced = True
+                self.synced_condition.notify()
             for func in self.on_synced_changed:
                 func(True)
 
     def clear_sync(self):
-        self.synced = False
+        with self.synced_condition:
+            self.synced = False
+            self.synced_condition.notify()
         self.synced_channels.clear()
         for func in self.on_synced_changed:
             func(False)
@@ -298,25 +343,29 @@ class ApplicationStatus():
         if state != self.state:
             self.state = state
             if state == 'Connected':
-                self.connected = True
+                with self.connected_condition:
+                    self.connected = True
+                    self.connected_condition.notify()
                 print('[status] connected')
                 for func in self.on_connected_changed:
                     func(True)
             elif self.connected:
-                self.connected = False
+                with self.connected_condition:
+                    self.connected = False
+                    self.connected_condition.notify()
                 self.stop_status_heartbeat()
                 self.clear_sync()
                 self.status_period = 0  # stop heartbeat
                 if not state == 'Timeout':  # clear in case we have no timeout
-                    with self.motion_lock:
+                    with self.motion_condition:
                         self.initialize_object('motion')
-                    with self.config_lock:
+                    with self.config_condition:
                         self.initialize_object('config')
-                    with self.io_lock:
+                    with self.io_condition:
                         self.initialize_object('io')
-                    with self.task_lock:
+                    with self.task_condition:
                         self.initialize_object('task')
-                    with self.interp_lock:
+                    with self.interp_condition:
                         self.initialize_object('interp')
                 print('[status] disconnected')
                 for func in self.on_connected_changed:
@@ -335,19 +384,19 @@ class ApplicationStatus():
         for subscription in self.subscriptions:
             self.status_socket.setsockopt(zmq.UNSUBSCRIBE, subscription)
             if subscription == 'motion':
-                with self.motion_lock:
+                with self.motion_condition:
                     self.initialize_object('motion')
             elif subscription == 'config':
-                with self.config_lock:
+                with self.config_condition:
                     self.initialize_object('config')
             elif subscription == 'io':
-                with self.io_lock:
+                with self.io_condition:
                     self.initialize_object('io')
             elif subscription == 'task':
-                with self.task_lock:
+                with self.task_condition:
                     self.initialize_object('lock')
             elif subscription == 'interp':
-                with self.interp_lock:
+                with self.interp_condition:
                     self.initialize_object('interp')
 
         self.subscriptions.clear()
@@ -1055,6 +1104,7 @@ class ApplicationError():
         self.shutdown = threading.Event()
         self.message_lock = threading.Lock()
         self.timer_lock = threading.Lock()
+        self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug
         self.is_ready = False
 
@@ -1131,6 +1181,13 @@ class ApplicationError():
         else:
             print('[status] received unrecognized message type')
 
+    def wait_connected(self, timeout=None):
+        with self.connected_condition:
+            if self.connected:
+                return True
+            self.connected_condition.wait(timeout=timeout)
+            return self.connected
+
     # returns all received messages and clears the buffer
     def get_messages(self):
         with self.message_lock:
@@ -1174,12 +1231,16 @@ class ApplicationError():
         if state != self.state:
             self.state = state
             if state == 'Connected':
-                self.connected = True
+                with self.connected_condition:
+                    self.connected = True
+                    self.connected_condition.notify()
                 print('[error] connected')
                 for func in self.on_connected_changed:
                     func(True)
             elif self.connected:
-                self.connected = False
+                with self.connected_condition:
+                    self.connected = False
+                    self.connected_condition.notify()
                 self.stop_error_heartbeat()
                 print('[error] disconnected')
                 for func in self.on_connected_changed:
