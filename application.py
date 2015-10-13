@@ -1,5 +1,8 @@
 import uuid
 import platform
+import os
+from urlparse import urlparse
+import ftplib
 
 import zmq
 import threading
@@ -1307,9 +1310,9 @@ class ApplicationError():
 class ApplicationFile():
 
     def __init__(self, debug=True):
-        self.threads = []
         self.debug = debug
-        self.is_ready = False
+        self.state_condition = threading.Condition(threading.Lock())
+        self.file_list_lock = threading.Lock()
 
         self.uri = ''
         self.local_file_path = ''
@@ -1317,5 +1320,203 @@ class ApplicationFile():
         self.local_path = ''
         self.remote_path = ''
         self.transfer_state = 'NoTransfer'
+        self.bytes_sent = 0.0
+        self.bytes_total = 0.0
         self.progress = 0.0
+        self.file = None
 
+        self._file_list = []
+
+    @property
+    def file_list(self):
+        with self.file_list_lock:
+            return self._file_list
+
+    def upload_worker(self):
+        o = urlparse(self.uri)
+        # test o.scheme
+
+        filename = os.path.basename(self.local_file_path)
+        self.remote_file_path = os.path.join(self.remote_path, filename)
+
+        self.update_state('UploadRunning')  # lets start the upload
+        if self.debug:
+            print('[file] starting upload of %s' % filename)
+
+        try:
+            self.bytes_sent = 0.0
+            self.bytes_total = os.path.getsize(self.local_file_path)
+            f = open(self.local_file_path, 'r')
+        except OSError as e:
+            self.update_state('Error')
+            self.update_error('file', str(e))
+            return
+
+        try:
+            self.progress = 0.0
+            ftp = ftplib.FTP()
+            ftp.connect(host=o.hostname, port=o.port)
+            ftp.login()
+            ftp.storbinary('STOR %s' % filename, f, blocksize=8192,
+                           callback=self.progress_callback)
+            ftp.close()
+            f.close()
+        except Exception as e:
+            self.update_state('Error')
+            self.update_error('ftp', str(e))
+            return
+
+        self.update_state('NoTransfer')  # upload successfully finished
+        if self.debug:
+            print('[file] upload of %s finished' % filename)
+
+    def download_worker(self):
+        o = urlparse(self.uri)
+        # test o.scheme
+
+        filename = self.remote_file_path[len(self.remote_path):]  # mid
+        self.local_file_path = os.path.join(self.local_path, filename)
+
+        self.update_state('DownloadRunning')  # lets start the upload
+        if self.debug:
+            print('[file] starting download of %s' % filename)
+
+        try:
+            local_path = os.path.dirname(os.path.abspath(self.local_file_path))
+            if not os.path.exists(local_path):
+                os.makedirs(local_path)
+            self.file = open(self.local_file_path, 'w')
+        except Exception as e:
+            self.update_state('Error')
+            self.update_error('file', str(e))
+            return
+
+        try:
+            ftp = ftplib.FTP()
+            ftp.connect(host=o.hostname, port=o.port)
+            ftp.login()
+            ftp.sendcmd("TYPE i")  # Switch to Binary mode
+            self.progress = 0.0
+            self.bytes_sent = 0.0
+            self.bytes_total = ftp.size(filename)
+            ftp.retrbinary('RETR %s' % filename, self.progress_callback)
+            ftp.close()
+            self.file.close()
+            self.file = None
+        except Exception as e:
+            self.update_state('Error')
+            self.update_error('ftp', str(e))
+            return
+
+        self.update_state('NoTransfer')  # upload successfully finished
+        if self.debug:
+            print('[file] download of %s finished' % filename)
+
+    def refresh_files_worker(self):
+        o = urlparse(self.uri)
+        # test o.scheme
+
+        self.update_state('RefreshRunning')  # lets start the upload
+        if self.debug:
+            print('[file] starting file list refresh')
+
+        try:
+            ftp = ftplib.FTP()
+            ftp.connect(host=o.hostname, port=o.port)
+            ftp.login()
+            with self.file_list_lock:
+                self._file_list = ftp.nlst()
+            ftp.close()
+        except Exception as e:
+            self.update_state('Error')
+            self.update_error('ftp', str(e))
+            return
+
+        self.update_state('NoTransfer')  # upload successfully finished
+        if self.debug:
+            print('[file] file refresh finished')
+
+    def remove_file_worker(self, filename):
+        o = urlparse(self.uri)
+        # test o.scheme
+
+        self.update_state('RemoveRunning')  # lets start the upload
+        if self.debug:
+            print('[file] removing %s' % filename)
+
+        try:
+            ftp = ftplib.FTP()
+            ftp.connect(host=o.hostname, port=o.port)
+            ftp.login()
+            ftp.delete(filename)
+            ftp.close()
+        except Exception as e:
+            self.update_state('Error')
+            self.update_error('ftp', str(e))
+            return
+
+        self.update_state('NoTransfer')  # upload successfully finished
+        if self.debug:
+            print('[file] removing %s completed' % filename)
+
+    def progress_callback(self, data):
+        if self.file is not None:
+            self.file.write(data)
+        self.bytes_sent += 8192
+        self.progress = self.bytes_sent / self.bytes_total
+
+    def start_upload(self):
+        with self.state_condition:
+            if self.transfer_state != 'NoTransfer':
+                return
+
+        thread = threading.Thread(target=self.upload_worker)
+        thread.start()
+
+    def start_download(self):
+        with self.state_condition:
+            if self.transfer_state != 'NoTransfer':
+                return
+
+        thread = threading.Thread(target=self.download_worker)
+        thread.start()
+
+    def refresh_files(self):
+        with self.state_condition:
+            if self.transfer_state != 'NoTransfer':
+                return
+
+        thread = threading.Thread(target=self.refresh_files_worker)
+        thread.start()
+
+    def remove_file(self, name):
+        with self.state_condition:
+            if self.transfer_state != 'NoTransfer':
+                return
+
+        thread = threading.Thread(target=self.remove_file_worker, args=(name, ))
+        thread.start()
+
+    def abort(self):
+        pass
+
+    def wait_completed(self, timeout=None):
+        with self.state_condition:
+            if self.transfer_state == 'NoTransfer':
+                return True
+            if self.transfer_state == 'Error':
+                return False
+            self.state_condition.wait(timeout=timeout)
+            return self.transfer_state == 'NoTransfer'
+
+    def update_state(self, state):
+        with self.state_condition:
+            if self.transfer_state != state:
+                self.transfer_state = state
+                self.state_condition.notify()
+
+    def update_error(self, error, description):
+        print('[file] error: %s %s' % (error, description))
+
+    def clear_error(self):
+        pass

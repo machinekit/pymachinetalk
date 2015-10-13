@@ -13,6 +13,7 @@ import application
 from application import ApplicationStatus
 from application import ApplicationCommand
 from application import ApplicationError
+from application import ApplicationFile
 import halremote
 
 if sys.version_info >= (3, 0):
@@ -60,6 +61,11 @@ class TestClass():
         self.status = ApplicationStatus()
         self.command = ApplicationCommand()
         self.error = ApplicationError()
+        self.fileservice = ApplicationFile()
+        self.fileservice.local_file_path = 'test.ngc'
+        self.fileservice.local_path = './ngc/'
+        self.fileservice.remote_path = '/home/xy/'
+        self.fileservice.remote_file_path = '/home/xy/test.ngc'
 
         halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)
         halrcmd_sd.on_discovered.append(self.halrcmd_discovered)
@@ -88,6 +94,11 @@ class TestClass():
         error_sd.on_disappeared.append(self.error_disappeared)
         error_sd.start()
 
+        file_sd = ServiceDiscovery(service_type="_file._sub._machinekit._tcp", uuid=uuid)
+        file_sd.on_discovered.append(self.file_discovered)
+        file_sd.on_disappeared.append(self.file_disappeared)
+        file_sd.start()
+
         self.timer = None
 
         self.use_curses = use_curses
@@ -103,6 +114,7 @@ class TestClass():
         self.command_window = curses.newwin(10, 40, 1, 86)
         self.connection_window = curses.newwin(10, 80, 12, 2)
         self.error_window = curses.newwin(20, 120, 12, 84)
+        self.file_window = curses.newwin(10, 80, 1, 108)
         curses.noecho()
         curses.cbreak()
 
@@ -157,6 +169,19 @@ class TestClass():
         print('%s disappeared' % name)
         self.error.stop()
 
+    def file_discovered(self, name, dsn):
+        print('discovered %s %s' % (name, dsn))
+        self.fileservice.uri = dsn
+        #self.fileservice.start_download()
+        self.fileservice.refresh_files()
+        self.fileservice.wait_completed()
+        print(self.fileservice.file_list)
+        self.fileservice.remove_file('test.ngc')
+        self.fileservice.wait_completed()
+
+    def file_disappeared(self, name):
+        print('%s disappeared' % name)
+
     def start_timer(self):
         self.toggle_pin()
         timer = threading.Timer(1.0, self.start_timer)
@@ -168,7 +193,7 @@ class TestClass():
         # print('flood %s' % self.status.io.flood)
         if self.use_curses:
             self.update_screen()
-        self.timer = threading.Timer(0.1, self.status_timer)
+        self.timer = threading.Timer(0.05, self.status_timer)
         self.timer.start()
 
     def toggle_pin(self):
@@ -226,18 +251,30 @@ class TestClass():
                 pos += 1
         error.refresh()
 
+        win = self.file_window
+        win.clear()
+        win.border(0)
+        win.addstr(1, 2, 'File')
+        win.addstr(3, 4, 'Status: %s' % self.fileservice.transfer_state)
+        win.addstr(4, 4, 'Progress: %f' % self.fileservice.progress)
+        win.refresh()
+
         self.screen.nodelay(True)
         c = self.screen.getch()
         if c == curses.KEY_F1:
             if self.status.task.task_state == application.TASK_STATE_ESTOP:
-                self.command.set_task_state(application.TASK_STATE_ESTOP_RESET)
+                ticket = self.command.set_task_state(application.TASK_STATE_ESTOP_RESET)
+                self.command.wait_completed(timeout=0.2)
             else:
                 self.command.set_task_state(application.TASK_STATE_ESTOP)
+                self.command.wait_completed()
         elif c == curses.KEY_F2:
             if self.status.task.task_state == application.TASK_STATE_ON:
                 self.command.set_task_state(application.TASK_STATE_OFF)
             else:
                 self.command.set_task_state(application.TASK_STATE_ON)
+        elif c == curses.KEY_F3:
+            self.fileservice.start_upload()
 
     def stop(self):
         if self.halrcomp is not None:
@@ -274,7 +311,7 @@ def main():
 
     gobject.threads_init()  # important: initialize threads if gobject main loop is used
     #register_exit_handler()
-    test = TestClass(uuid=uuid, use_curses=True)
+    test = TestClass(uuid=uuid, use_curses=False)#True)
     loop = gobject.MainLoop()
     try:
         loop.run()
