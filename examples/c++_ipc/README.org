@@ -1,0 +1,4 @@
+* pymachinetalk to C++ IPC example
+
+This example demonstrates the usage of pymachinetalk in combination
+with ZeroMQ IPC sockets to talk to a C++ application.
