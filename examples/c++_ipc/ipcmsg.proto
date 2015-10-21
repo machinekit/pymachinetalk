@@ -1,0 +1,24 @@
+package pb;
+
+enum MessageType {
+    IPC_JOG = 1;
+    IPC_POSITION = 2;
+    IPC_CONNECTED = 3;
+}
+
+enum JogType {
+    JOG_STOP = 0;
+    JOG_CONTINUOUS = 1;
+    JOG_INCREMENTAL = 2;
+}
+
+message Message {
+    required MessageType type = 1;
+    optional int32 axis = 2;
+    optional double velocity = 3;
+    optional double distance = 4;
+    optional JogType jog_type = 5;
+    optional double x = 6;
+    optional double y = 7;
+    optional bool connected = 8;
+}
