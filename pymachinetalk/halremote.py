@@ -133,7 +133,7 @@ class RemoteComponent():
         elif self.rx.type == MT_HALRCOMP_BIND_REJECT \
         or self.rx.type == MT_HALRCOMP_SET_REJECT:
             self.halrcmd_state = 'Down'
-            updateState('Error')
+            self.update_state('Error')
             if self.rx.type == MT_HALRCOMP_BIND_REJECT:
                 self.update_error('Bind', self.rx.note)
             else:
