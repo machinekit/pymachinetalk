@@ -1,16 +1,12 @@
-import time
 import uuid
 import platform
 
 import zmq
 import threading
-#import gevent
-#import gevent.event
-#from gevent import greenlet
 
 # protobuf
-from message_pb2 import Container
-from types_pb2 import *
+from machinetalk.protobuf.message_pb2 import Container
+from machinetalk.protobuf.types_pb2 import *
 
 
 class HalPin():

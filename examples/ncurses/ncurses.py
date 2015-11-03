@@ -8,13 +8,13 @@ import threading
 import curses
 
 from machinekit import config
-from dns_sd import ServiceDiscovery
-import application
-from application import ApplicationStatus
-from application import ApplicationCommand
-from application import ApplicationError
-from application import ApplicationFile
-import halremote
+from pymachinetalk.dns_sd import ServiceDiscovery
+from pymachinetalk.application import ApplicationStatus
+from pymachinetalk.application import ApplicationCommand
+from pymachinetalk.application import ApplicationError
+from pymachinetalk.application import ApplicationFile
+import pymachinetalk.application as application
+import pymachinetalk.halremote as halremote
 
 if sys.version_info >= (3, 0):
     import configparser

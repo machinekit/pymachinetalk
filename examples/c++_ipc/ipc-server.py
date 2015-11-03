@@ -9,10 +9,10 @@ import zmq
 # Machinekit specific, can only use on local machine
 from machinekit import config
 # Machinetalk bindings
-from dns_sd import ServiceDiscovery
-import application
-from application import ApplicationStatus
-from application import ApplicationCommand
+from pymachinetalk.dns_sd import ServiceDiscovery
+from pymachinetalk.application import ApplicationStatus
+from pymachinetalk.application import ApplicationCommand
+import pymachinetalk.application as application
 
 from ipcmsg_pb2 import *
 
