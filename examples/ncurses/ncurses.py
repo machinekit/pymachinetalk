@@ -311,7 +311,7 @@ def main():
 
     gobject.threads_init()  # important: initialize threads if gobject main loop is used
     #register_exit_handler()
-    test = TestClass(uuid=uuid, use_curses=False)#True)
+    test = TestClass(uuid=uuid, use_curses=True)
     loop = gobject.MainLoop()
     try:
         loop.run()
