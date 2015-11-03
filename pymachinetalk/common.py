@@ -3,6 +3,7 @@
 class MessageObject():
     def __init__(self):
         self.is_position = False
+        self.id_map = {}
 
     def __str__(self):
         output = ''
@@ -51,6 +52,7 @@ def recurse_descriptor(descriptor, obj):
             value = [value]
 
         setattr(obj, field.name, value)
+        obj.id_map[field.number] = field.name
 
 
 def recurse_message(message, obj, field_filter=''):
@@ -58,20 +60,25 @@ def recurse_message(message, obj, field_filter=''):
         filter_enabled = field_filter != ''
         # TODO: handle special file case here...
 
-        if filter_enabled and descriptor.name != field_filter:
+        if descriptor.number in obj.id_map:
+            name = obj.id_map[descriptor.number]
+        else:
+            continue  # we do not know the object
+
+        if filter_enabled and name != field_filter:
             continue
 
         if descriptor.label != descriptor.LABEL_REPEATED:
-            if message.HasField(descriptor.name):
+            if message.HasField(name):
                 if descriptor.type == descriptor.TYPE_MESSAGE:
-                    sub_obj = getattr(obj, descriptor.name)
-                    recurse_message(getattr(message, descriptor.name), sub_obj)
+                    sub_obj = getattr(obj, name)
+                    recurse_message(getattr(message, name), sub_obj)
                 else:
-                    setattr(obj, descriptor.name, getattr(message, descriptor.name))
+                    setattr(obj, name, getattr(message, name))
         else:
             if descriptor.type == descriptor.TYPE_MESSAGE:
-                array = getattr(obj, descriptor.name)
-                repeated = getattr(message, descriptor.name)
+                array = getattr(obj, name)
+                repeated = getattr(message, name)
                 for sub_message in repeated:
                     index = sub_message.index
 
@@ -81,12 +88,12 @@ def recurse_message(message, obj, field_filter=''):
                     value = None
                     if len(sub_message.DESCRIPTOR.fields) == 2:
                         sub_obj = MessageObject()
+                        recurse_descriptor(sub_message.DESCRIPTOR, sub_obj)
                         recurse_message(sub_message, sub_obj)
                         delattr(sub_obj, 'index')
                         value = getattr(sub_obj, dir(sub_obj)[-1])
                     else:
                         sub_obj = array[index]
                         recurse_message(sub_message, sub_obj)
-                        delattr(sub_obj, 'index')
                         value = sub_obj
                     array[index] = value
