@@ -53,7 +53,7 @@ class TestClass():
         halrcomp.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp = halrcomp
 
-        halrcomp2 = halremote.HalRemoteComponent(name='test2')
+        halrcomp2 = halremote.RemoteComponent(name='test2')
         halrcomp2.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp2.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp2 = halrcomp2

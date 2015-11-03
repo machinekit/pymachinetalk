@@ -9,7 +9,7 @@ from machinetalk.protobuf.message_pb2 import Container
 from machinetalk.protobuf.types_pb2 import *
 
 
-class HalPin():
+class Pin():
     def __init__(self):
         self.name = ''
         self.pintype = HAL_BIT
@@ -56,7 +56,7 @@ class HalPin():
         return self.value
 
 
-class HalRemoteComponent():
+class RemoteComponent():
     def __init__(self, name, debug=False):
         self.threads = []
         self.shutdown = threading.Event()
@@ -322,7 +322,7 @@ class HalRemoteComponent():
 
     # create a new HAL pin
     def newpin(self, name, pintype, direction):
-        pin = HalPin()
+        pin = Pin()
         pin.name = name
         pin.pintype = pintype
         pin.direction = direction
@@ -436,4 +436,4 @@ class HalRemoteComponent():
 
 
 def component(name):
-    return HalRemoteComponent(name)
+    return RemoteComponent(name)
