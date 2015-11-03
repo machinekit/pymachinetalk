@@ -2,6 +2,7 @@ import sys
 import avahi
 import dbus
 import pprint
+import inspect
 import avahi.ServiceTypeDatabase
 import dbus.glib
 
@@ -71,20 +72,27 @@ class ServiceDiscovery():
             print "\tHost %s (%s), port %i, TXT data: %s" % (host, address, port, avahi.txt_array_to_string_array(txt))
 
         txts = avahi.txt_array_to_string_array(txt)
-        match = self.uuid == ''
+        match = False
         dsn = None
+        uuid = None
         for txt in txts:
             key, value = txt.split('=')
             if key == 'dsn':
                 dsn = value
             elif key == 'uuid':
+                uuid = value
                 match = self.uuid == value
+        match = match or (self.uuid == '')
+
         if match:
             self.service_names.append(name)
             if self.debug:
-                print('discovered: %s %s' % (name, dsn))
+                print('discovered: %s %s %s' % (name, dsn, uuid))
             for func in self.on_discovered:
-                func(name, dsn)
+                if len(inspect.getargspec(func).args) == 4:  # pass uuid when callback wants it
+                    func(name, dsn, uuid)
+                else:
+                    func(name, dsn)
 
     def print_error(self, err):
         if self.debug:
