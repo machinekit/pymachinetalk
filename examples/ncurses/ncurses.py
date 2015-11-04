@@ -21,27 +21,6 @@ if sys.version_info >= (3, 0):
 else:
     import ConfigParser as configparser
 
-shutdown = False
-
-
-def _exitHandler(signum, frame):
-    del signum
-    del frame
-    global shutdown
-    shutdown = True
-    print("handled")
-
-
-# register exit signal handlers
-def register_exit_handler():
-    signal.signal(signal.SIGINT, _exitHandler)
-    signal.signal(signal.SIGTERM, _exitHandler)
-
-
-def check_exit():
-    global shutdown
-    return shutdown
-
 
 class TestClass():
     def __init__(self, uuid, use_curses):
@@ -124,54 +103,54 @@ class TestClass():
         self.halrcomp2.ready()
         #gevent.spawn(self.start_timer)
 
-    def halrcmd_discovered(self, name, dsn):
-        print("discovered %s %s" % (name, dsn))
-        self.halrcomp.halrcmd_uri = dsn
-        self.halrcomp2.halrcmd_uri = dsn
+    def halrcmd_discovered(self, data):
+        print("discovered %s %s" % (data.name, data.dsn))
+        self.halrcomp.halrcmd_uri = data.dsn
+        self.halrcomp2.halrcmd_uri = data.dsn
         self.halrcmdReady = True
         if self.halrcompReady:
             self.start_halrcomp()
 
-    def halrcomp_discovered(self, name, dsn):
-        print("discovered %s %s" % (name, dsn))
-        self.halrcomp.halrcomp_uri = dsn
-        self.halrcomp2.halrcomp_uri = dsn
+    def halrcomp_discovered(self, data):
+        print("discovered %s %s" % (data.name, data.dsn))
+        self.halrcomp.halrcomp_uri = data.dsn
+        self.halrcomp2.halrcomp_uri = data.dsn
         self.halrcompReady = True
         if self.halrcmdReady:
             self.start_halrcomp()
 
-    def status_discovered(self, name, dsn):
-        print('discovered %s %s' % (name, dsn))
-        self.status.status_uri = dsn
+    def status_discovered(self, data):
+        print('discovered %s %s' % (data.name, data.dsn))
+        self.status.status_uri = data.dsn
         self.status.ready()
         self.timer = threading.Timer(0.1, self.status_timer)
         self.timer.start()
 
-    def status_disappeared(self, name):
-        print('%s disappeared' % name)
+    def status_disappeared(self, data):
+        print('%s disappeared' % data.name)
         self.status.stop()
 
-    def command_discovered(self, name, dsn):
-        print('discovered %s %s' % (name, dsn))
-        self.command.command_uri = dsn
+    def command_discovered(self, data):
+        print('discovered %s %s' % (data.name, data.dsn))
+        self.command.command_uri = data.dsn
         self.command.ready()
 
-    def command_disappeared(self, name):
-        print('%s disappeared' % name)
+    def command_disappeared(self, data):
+        print('%s disappeared' % data.name)
         self.command.stop()
 
-    def error_discovered(self, name, dsn):
-        print('discovered %s %s' % (name, dsn))
-        self.error.error_uri = dsn
+    def error_discovered(self, data):
+        print('discovered %s %s' % (data.name, data.dsn))
+        self.error.error_uri = data.dsn
         self.error.ready()
 
-    def error_disappeared(self, name):
-        print('%s disappeared' % name)
+    def error_disappeared(self, data):
+        print('%s disappeared' % data.name)
         self.error.stop()
 
-    def file_discovered(self, name, dsn):
-        print('discovered %s %s' % (name, dsn))
-        self.fileservice.uri = dsn
+    def file_discovered(self, data):
+        print('discovered %s %s' % (data.name, data.dsn))
+        self.fileservice.uri = data.dsn
         #self.fileservice.start_download()
         self.fileservice.refresh_files()
         self.fileservice.wait_completed()
@@ -179,8 +158,8 @@ class TestClass():
         self.fileservice.remove_file('test.ngc')
         self.fileservice.wait_completed()
 
-    def file_disappeared(self, name):
-        print('%s disappeared' % name)
+    def file_disappeared(self, data):
+        print('%s disappeared' % data.name)
 
     def start_timer(self):
         self.toggle_pin()
@@ -310,7 +289,6 @@ def main():
     # remote = mki.getint("MACHINEKIT", "REMOTE")
 
     gobject.threads_init()  # important: initialize threads if gobject main loop is used
-    #register_exit_handler()
     test = TestClass(uuid=uuid, use_curses=True)
     loop = gobject.MainLoop()
     try:

@@ -38,23 +38,23 @@ class BasicClass():
         halrcomp_sd.start()
         #self.harcomp_sd = halrcomp_sd
 
-    def service_disappeared(self, name):
-        print("disappeared %s %s" % (name))
+    def service_disappeared(self, data):
+        print("disappeared %s %s" % (data.name))
 
-    def service_discovered(self, name, dsn, uuid):
-        print("discovered %s %s %s" % (name, dsn, uuid))
-        self.start_sd(uuid)
+    def service_discovered(self, data):
+        print("discovered %s %s %s" % (data.name, data.dsn, data.uuid))
+        self.start_sd(data.uuid)
 
-    def halrcmd_discovered(self, name, dsn):
-        print("discovered %s %s" % (name, dsn))
-        self.halrcomp.halrcmd_uri = dsn
+    def halrcmd_discovered(self, data):
+        print("discovered %s %s" % (data.name, data.dsn))
+        self.halrcomp.halrcmd_uri = data.dsn
         self.halrcmdReady = True
         if self.halrcompReady:
             self.start_halrcomp()
 
-    def halrcomp_discovered(self, name, dsn):
-        print("discovered %s %s" % (name, dsn))
-        self.halrcomp.halrcomp_uri = dsn
+    def halrcomp_discovered(self, data):
+        print("discovered %s %s" % (data.name, data.dsn))
+        self.halrcomp.halrcomp_uri = data.dsn
         self.halrcompReady = True
         if self.halrcmdReady:
             self.start_halrcomp()
