@@ -1,19 +1,15 @@
-import time
 import uuid
 import platform
 
 import zmq
 import threading
-#import gevent
-#import gevent.event
-#from gevent import greenlet
 
 # protobuf
-from message_pb2 import Container
-from types_pb2 import *
+from machinetalk.protobuf.message_pb2 import Container
+from machinetalk.protobuf.types_pb2 import *
 
 
-class HalPin():
+class Pin():
     def __init__(self):
         self.name = ''
         self.pintype = HAL_BIT
@@ -22,50 +18,73 @@ class HalPin():
         self._value = None
         self.handle = 0  # stores handle received on bind
         self.parent = None
-        self.lock = threading.Lock()
+        self.synced_condition = threading.Condition(threading.Lock())
+        self.value_condition = threading.Condition(threading.Lock())
 
         # callbacks
         self.on_synced_changed = []
+        self.on_value_changed = []
+
+    def wait_synced(self, timeout=None):
+        with self.synced_condition:
+            if self.synced:
+                return True
+            self.synced_condition.wait(timeout=timeout)
+            return self.synced
+
+    def wait_value(self, timeout=None):
+        with self.value_condition:
+            if self.value:
+                return True
+            self.value_condition.wait(timeout=timeout)
+            return self.value
 
     @property
     def value(self):
-        with self.lock:
+        with self.value_condition:
             return self._value
 
     @value.setter
     def value(self, value):
-        with self.lock:
-            self._value = value
+        with self.value_condition:
+            if self._value != value:
+                self._value = value
+                self.value_condition.notify()
+                for func in self.on_value_changed:
+                    func(value)
 
     @property
     def synced(self):
-        with self.lock:
+        with self.synced_condition:
             return self._synced
 
     @synced.setter
     def synced(self, value):
-        with self.lock:
+        with self.synced_condition:
             if value != self._synced:
                 self._synced = value
+                self.synced_condition.notify()
                 for func in self.on_synced_changed:
                     func(value)
 
     def set(self, value):
-        self.value = value
-        self.synced = False
-        if self.parent:
-            self.parent.pin_change(self)
+        if self.value != value:
+            self.value = value
+            self.synced = False
+            if self.parent:
+                self.parent.pin_change(self)
 
     def get(self):
         return self.value
 
 
-class HalRemoteComponent():
+class RemoteComponent():
     def __init__(self, name, debug=False):
         self.threads = []
         self.shutdown = threading.Event()
         self.tx_lock = threading.Lock()
         self.timer_lock = threading.Lock()
+        self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug
 
         # callbacks
@@ -104,6 +123,13 @@ class HalRemoteComponent():
         self.halrcomp_socket = self.context.socket(zmq.SUB)
         self.sockets_connected = False
 
+    def wait_connected(self, timeout=None):
+        with self.connected_condition:
+            if self.connected:
+                return True
+            self.connected_condition.wait(timeout=timeout)
+            return self.connected
+
     def socket_worker(self):
         poll = zmq.Poller()
         poll.register(self.halrcmd_socket, zmq.POLLIN)
@@ -137,7 +163,7 @@ class HalRemoteComponent():
         elif self.rx.type == MT_HALRCOMP_BIND_REJECT \
         or self.rx.type == MT_HALRCOMP_SET_REJECT:
             self.halrcmd_state = 'Down'
-            updateState('Error')
+            self.update_state('Error')
             if self.rx.type == MT_HALRCOMP_BIND_REJECT:
                 self.update_error('Bind', self.rx.note)
             else:
@@ -310,23 +336,31 @@ class HalRemoteComponent():
         if state != self.state:
             self.state = state
             if state == 'Connected':
-                self.connected = True
+                with self.connected_condition:
+                    self.connected = True
+                    self.connected_condition.notify()
                 print('[%s] connected' % self.name)
                 for func in self.on_connected_changed:
                     func(self.connected)
             elif self.connected:
-                self.connected = False
+                with self.connected_condition:
+                    self.connected = False
+                    self.connected_condition.notify()
                 self.stop_halrcomp_heartbeat()
                 print('[%s] disconnected' % self.name)
                 for func in self.on_connected_changed:
                     func(self.connected)
+            elif state == 'Error':
+                with self.connected_condition:
+                    self.connected = False
+                    self.connected_condition.notify()  # notify even if not connected
 
     def update_error(self, error, description):
         print('[%s] error: %s %s' % (self.name, error, description))
 
     # create a new HAL pin
     def newpin(self, name, pintype, direction):
-        pin = HalPin()
+        pin = Pin()
         pin.name = name
         pin.pintype = pintype
         pin.direction = direction
@@ -357,7 +391,6 @@ class HalRemoteComponent():
             self.start()
 
     def pin_update(self, rpin, lpin):
-        lpin.lock.acquire()
         if rpin.HasField('halfloat'):
             lpin.value = float(rpin.halfloat)
             lpin.synced = True
@@ -370,7 +403,6 @@ class HalRemoteComponent():
         elif rpin.HasField('halu32'):
             lpin.value = int(rpin.halu32)
             lpin.synced = True
-        lpin.lock.release()
 
     def pin_change(self, pin):
         if self.debug:
@@ -440,4 +472,4 @@ class HalRemoteComponent():
 
 
 def component(name):
-    return HalRemoteComponent(name)
+    return RemoteComponent(name)

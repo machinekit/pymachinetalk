@@ -9,10 +9,10 @@ import zmq
 # Machinekit specific, can only use on local machine
 from machinekit import config
 # Machinetalk bindings
-from dns_sd import ServiceDiscovery
-import application
-from application import ApplicationStatus
-from application import ApplicationCommand
+from pymachinetalk.dns_sd import ServiceDiscovery
+from pymachinetalk.application import ApplicationStatus
+from pymachinetalk.application import ApplicationCommand
+import pymachinetalk.application as application
 
 from ipcmsg_pb2 import *
 
@@ -109,28 +109,28 @@ class IPCServer():
             self.tx.connected = self.status.synced and self.command.connected
             self.send_msg(identity, IPC_CONNECTED)
 
-    def status_discovered(self, name, dsn):
+    def status_discovered(self, data):
         if self.debug:
-            print('discovered %s %s' % (name, dsn))
-        self.status.status_uri = dsn
+            print('discovered %s %s' % (data.name, data.dsn))
+        self.status.status_uri = data.dsn
         self.status.ready()
         #self.timer = threading.Timer(0.1, self.status_timer)
         #self.timer.start()
 
-    def status_disappeared(self, name):
+    def status_disappeared(self, data):
         if self.debug:
-            print('%s disappeared' % name)
+            print('%s disappeared' % data.name)
         self.status.stop()
 
-    def command_discovered(self, name, dsn):
+    def command_discovered(self, data):
         if self.debug:
-            print('discovered %s %s' % (name, dsn))
-        self.command.command_uri = dsn
+            print('discovered %s %s' % (data.name, data.dsn))
+        self.command.command_uri = data.dsn
         self.command.ready()
 
-    def command_disappeared(self, name):
+    def command_disappeared(self, data):
         if self.debug:
-            print('%s disappeared' % name)
+            print('%s disappeared' % data.name)
         self.command.stop()
 
     def stop(self):
