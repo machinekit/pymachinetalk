@@ -22,6 +22,7 @@ class Pin():
 
         # callbacks
         self.on_synced_changed = []
+        self.on_value_changed = []
 
     @property
     def value(self):
@@ -31,7 +32,10 @@ class Pin():
     @value.setter
     def value(self, value):
         with self.lock:
-            self._value = value
+            if self._value != value:
+                self._value = value
+                for func in self.on_value_changed:
+                    func(value)
 
     @property
     def synced(self):
@@ -47,10 +51,11 @@ class Pin():
                     func(value)
 
     def set(self, value):
-        self.value = value
-        self.synced = False
-        if self.parent:
-            self.parent.pin_change(self)
+        if self.value != value:
+            self.value = value
+            self.synced = False
+            if self.parent:
+                self.parent.pin_change(self)
 
     def get(self):
         return self.value
