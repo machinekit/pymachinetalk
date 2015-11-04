@@ -5,6 +5,7 @@ import pprint
 import inspect
 import avahi.ServiceTypeDatabase
 import dbus.glib
+import threading
 
 
 class ServiceTypeDatabase:
@@ -18,8 +19,19 @@ class ServiceTypeDatabase:
             return servicetype
 
 
+class ServiceData():
+    def __init__(self):
+        self.uuid = ''
+        self.dsn = ''
+        self.name = ''
+        self.txts = []
+
+
 class ServiceDiscovery():
     def __init__(self, service_type, uuid='', interface='', debug=False):
+        self.discovered_condition = threading.Condition(threading.Lock())
+        self.disappeared_condition = threading.Condition(threading.Lock())
+
         # callbacks
         self.on_discovered = []
         self.on_disappeared = []
@@ -30,7 +42,7 @@ class ServiceDiscovery():
         self.debug = debug
         self.domain = ''
         self.service_type = service_type
-        self.service_names = []  # used once discovered
+        self.service_names = {}  # used once discovered
         self.uuid = uuid
         self.interface = interface
         try:
@@ -41,6 +53,20 @@ class ServiceDiscovery():
             sys.exit(1)
 
         self.service_browsers = {}
+
+    def wait_discovered(self, timeout=None):
+        with self.discovered_condition:
+            if len(self.service_names) > 0:
+                return True
+            self.discovered_condition.wait(timeout=timeout)
+            return (len(self.service_names) > 0)
+
+    def wait_disappeared(self, timeout=None):
+        with self.disappeared_condition:
+            if len(self.service_names) == 0:
+                return True
+            self.disappeared_condition.wait(timeout=timeout)
+            return (len(self.service_names) == 0)
 
     def start(self):
         self.start_service_discovery()
@@ -85,14 +111,18 @@ class ServiceDiscovery():
         match = match or (self.uuid == '')
 
         if match:
-            self.service_names.append(name)
+            data = ServiceData()
+            data.name = name
+            data.dsn = dsn
+            data.uuid = uuid
+            data.txts = txts
+            with self.discovered_condition:
+                self.service_names[name] = data
+                self.discovered_condition.notify()
             if self.debug:
                 print('discovered: %s %s %s' % (name, dsn, uuid))
             for func in self.on_discovered:
-                if len(inspect.getargspec(func).args) == 4:  # pass uuid when callback wants it
-                    func(name, dsn, uuid)
-                else:
-                    func(name, dsn)
+                func(data)
 
     def print_error(self, err):
         if self.debug:
@@ -119,11 +149,13 @@ class ServiceDiscovery():
         if self.debug:
             print "Service '%s' of type '%s' in domain '%s' on %s.%i disappeared." % (name, servicetype, domain, self.siocgifname(interface), protocol)
         if name in self.service_names:
-            self.service_names.remove(name)
+            with self.disappeared_condition:
+                data = self.service_names.pop(name)
+                self.disappeared_condition.notify()
             if self.debug:
                 print("disappered: %s" % name)
             for func in self.on_disappeared:
-                func(name)
+                func(data)
 
     def add_service_type(self, interface, protocol, servicetype, domain):
         # Are we already browsing this domain for this type?
