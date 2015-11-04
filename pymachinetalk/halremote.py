@@ -18,35 +18,52 @@ class Pin():
         self._value = None
         self.handle = 0  # stores handle received on bind
         self.parent = None
-        self.lock = threading.Lock()
+        self.synced_condition = threading.Condition(threading.Lock())
+        self.value_condition = threading.Condition(threading.Lock())
 
         # callbacks
         self.on_synced_changed = []
         self.on_value_changed = []
 
+    def wait_synced(self, timeout=None):
+        with self.synced_condition:
+            if self.synced:
+                return True
+            self.synced_condition.wait(timeout=timeout)
+            return self.synced
+
+    def wait_value(self, timeout=None):
+        with self.value_condition:
+            if self.value:
+                return True
+            self.value_condition.wait(timeout=timeout)
+            return self.value
+
     @property
     def value(self):
-        with self.lock:
+        with self.value_condition:
             return self._value
 
     @value.setter
     def value(self, value):
-        with self.lock:
+        with self.value_condition:
             if self._value != value:
                 self._value = value
+                self.value_condition.notify()
                 for func in self.on_value_changed:
                     func(value)
 
     @property
     def synced(self):
-        with self.lock:
+        with self.synced_condition:
             return self._synced
 
     @synced.setter
     def synced(self, value):
-        with self.lock:
+        with self.synced_condition:
             if value != self._synced:
                 self._synced = value
+                self.synced_condition.notify()
                 for func in self.on_synced_changed:
                     func(value)
 
@@ -67,6 +84,7 @@ class RemoteComponent():
         self.shutdown = threading.Event()
         self.tx_lock = threading.Lock()
         self.timer_lock = threading.Lock()
+        self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug
 
         # callbacks
@@ -104,6 +122,13 @@ class RemoteComponent():
         self.halrcmd_socket.setsockopt(zmq.IDENTITY, client_id)
         self.halrcomp_socket = self.context.socket(zmq.SUB)
         self.sockets_connected = False
+
+    def wait_connected(self, timeout=None):
+        with self.connected_condition:
+            if self.connected:
+                return True
+            self.connected_condition.wait(timeout=timeout)
+            return self.connected
 
     def socket_worker(self):
         poll = zmq.Poller()
@@ -311,16 +336,24 @@ class RemoteComponent():
         if state != self.state:
             self.state = state
             if state == 'Connected':
-                self.connected = True
+                with self.connected_condition:
+                    self.connected = True
+                    self.connected_condition.notify()
                 print('[%s] connected' % self.name)
                 for func in self.on_connected_changed:
                     func(self.connected)
             elif self.connected:
-                self.connected = False
+                with self.connected_condition:
+                    self.connected = False
+                    self.connected_condition.notify()
                 self.stop_halrcomp_heartbeat()
                 print('[%s] disconnected' % self.name)
                 for func in self.on_connected_changed:
                     func(self.connected)
+            elif state == 'Error':
+                with self.connected_condition:
+                    self.connected = False
+                    self.connected_condition.notify()  # notify even if not connected
 
     def update_error(self, error, description):
         print('[%s] error: %s %s' % (self.name, error, description))
@@ -358,7 +391,6 @@ class RemoteComponent():
             self.start()
 
     def pin_update(self, rpin, lpin):
-        lpin.lock.acquire()
         if rpin.HasField('halfloat'):
             lpin.value = float(rpin.halfloat)
             lpin.synced = True
@@ -371,7 +403,6 @@ class RemoteComponent():
         elif rpin.HasField('halu32'):
             lpin.value = int(rpin.halu32)
             lpin.synced = True
-        lpin.lock.release()
 
     def pin_change(self, pin):
         if self.debug:
