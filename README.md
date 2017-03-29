@@ -1,4 +1,4 @@
-* Machinetalk bindings for Python
+# Machinetalk bindings for Python
 
   This repository contains Machinetalk bindings for
   Python. Machinetalk is the middleware for Machinekit the open source
