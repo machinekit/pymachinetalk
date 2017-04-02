@@ -2,7 +2,6 @@ import sys
 import avahi
 import dbus
 import pprint
-import inspect
 import avahi.ServiceTypeDatabase
 import dbus.glib
 import threading
