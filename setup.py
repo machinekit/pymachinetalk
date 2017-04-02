@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 from distutils.core import setup
-import os
-import subprocess
 import sys
 
 # We must use setuptools, not distutils, because we need to use the
@@ -36,7 +34,7 @@ if __name__ == '__main__':
     setup(name="pymachinetalk",
           version="1.0",
           description="Python bindings for Machinetalk",
-          url="https://github.com/strahlex/pymachinetalk",
+          url="https://github.com/machinekit/pymachinetalk",
           namespace_packages=['pymachinetalk'],
           packages=find_packages(),
           install_requires=['setuptools'],
