@@ -33,3 +33,8 @@ You can install pymachinetalk using the Python setuptools:
 ```bash
 sudo python setup.py install
 ```
+
+## TODO
+
+* Pymachinetalk has been partially ported to [machinetalk-gsl](https://github.com/machinekoder/machinetalk-gsl). The application modules still nee to be ported.
+* Using python-zeroconf instead of python-dbus -> this would make it possible to get rid of the Glib event loop dependency
