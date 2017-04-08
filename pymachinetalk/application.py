@@ -14,6 +14,7 @@ import machinetalk.protobuf.types_pb2 as types
 #from machinetalk.protobuf.status_pb2 import *
 from machinetalk_core.application.statusbase import StatusBase
 from machinetalk_core.application.commandbase import CommandBase
+from machinetalk_core.application.errorbase import ErrorBase
 
 ORIGIN_G54 = types.ORIGIN_G54
 ORIGIN_G55 = types.ORIGIN_G55
@@ -813,13 +814,10 @@ class ApplicationCommand(CommandBase):
         return self._tacke_ticket()
 
 
-class ApplicationError():
-
+class ApplicationError(ErrorBase):
     def __init__(self, debug=False):
-        self.threads = []
-        self.shutdown = threading.Event()
+        super(ErrorBase, self).__init__(debuglevel=int(debug))
         self.message_lock = threading.Lock()
-        self.timer_lock = threading.Lock()
         self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug
         self.is_ready = False
@@ -828,74 +826,8 @@ class ApplicationError():
         self.on_connected_changed = []
 
         self.connected = False
-        self.state = 'Disconnected'
-        self.socket_state = 'Down'
         self.channels = set(['error', 'text', 'display'])
         self.error_list = []
-
-        self.error_uri = ''
-        self.heartbeat_period = 0
-        self.heartbeat_timer = None
-        self.subscriptions = set()
-
-        # more efficient to reuse protobuf message
-        self.rx = Container()
-
-        # ZeroMQ
-        context = zmq.Context()
-        context.linger = 0
-        self.context = context
-        self.socket = self.context.socket(zmq.SUB)
-        self.sockets_connected = False
-
-    def socket_worker(self):
-        poll = zmq.Poller()
-        poll.register(self.socket, zmq.POLLIN)
-
-        while not self.shutdown.is_set():
-            s = dict(poll.poll(200))
-            if self.socket in s:
-                self.process_error()
-
-    def process_error(self):
-        (topic, msg) = self.socket.recv_multipart()
-        self.rx.ParseFromString(msg)
-
-        if self.debug:
-            print('[error] received message: %s' % topic)
-            print(self.rx)
-
-        if self.rx.type == types.MT_EMC_NML_ERROR \
-           or self.rx.type == types.MT_EMC_NML_TEXT \
-           or self.rx.type == types.MT_EMC_NML_DISPLAY \
-           or self.rx.type == types.MT_EMC_OPERATOR_TEXT \
-           or self.rx.type == types.MT_EMC_OPERATOR_ERROR \
-           or self.rx.type == types.MT_EMC_OPERATOR_DISPLAY:
-
-            error = {'type': self.rx.type, 'notes': []}
-            with self.message_lock:
-                for note in self.rx.note:
-                    error['notes'].append(note)
-                    self.error_list.append(error)
-            self.refresh_error_heartbeat()
-
-        elif self.rx.type == types.MT_PING:
-            if self.socket_state == 'Up':
-                self.refresh_error_heartbeat()
-            else:
-                if self.state == 'Timeout':  # waiting for the ping
-                    self.update_state('Connecting')
-                    self.unsubscribe()  # clean up previous subscription
-                    self.subscribe()  # trigger a fresh subscribe -> full update
-                else:  # ping as result from subscription received
-                    self.socket_state = 'Up'
-                    self.update_state('Connected')
-
-            if self.rx.HasField('pparams'):
-                interval = self.rx.pparams.keepalive_timer
-                self.start_error_heartbeat(interval * 2)  # wait double the hearbeat intverval
-        else:
-            print('[status] received unrecognized message type')
 
     def wait_connected(self, timeout=None):
         with self.connected_condition:
@@ -904,6 +836,57 @@ class ApplicationError():
             self.connected_condition.wait(timeout=timeout)
             return self.connected
 
+    def ready(self):
+        if not self.is_ready:
+            self.is_ready = True
+            self.start()
+
+    def emc_nml_error_received(self, _, rx):
+        self._error_message_received(rx)
+
+    def emc_nml_text_received(self, _, rx):
+        self._error_message_received(rx)
+
+    def emc_nml_display_received(self, _, rx):
+        self._error_message_received(rx)
+
+    def emc_operator_text_received(self, _, rx):
+        self._error_message_received(rx)
+
+    def emc_operator_display_received(self, _, rx):
+        self._error_message_received(rx)
+
+    def emc_operator_error_received(self, _, rx):
+        self._error_message_received(rx)
+
+    def _error_message_received(self, rx):
+        error = {'type': rx.type, 'notes': []}
+        with self.message_lock:
+            for note in rx.note:
+                error['notes'].append(note)
+                self.error_list.append(error)
+
+    # slot
+    def update_topics(self):
+        self.clear_error_topics()
+        for channel in self.channels:
+            self.add_error_channel(channel)
+
+    # slot
+    def set_connected(self):
+        self._update_connected(True)
+
+    # slot
+    def clear_connected(self):
+        self._update_connected(False)
+
+    def _update_connected(self, connected):
+        with self.connected_condition:
+            self.connected = connected
+            self.connected_condition.notify()
+        for cb in self.on_connected_changed:
+            cb(connected)
+
     # returns all received messages and clears the buffer
     def get_messages(self):
         with self.message_lock:
@@ -911,116 +894,8 @@ class ApplicationError():
             self.error_list = []
             return messages
 
-    def heartbeat_timer_tick(self):
-        self.socket_state = 'Down'
-        self.update_state('Timeout')
 
-    def start_error_heartbeat(self, interval):
-        self.timer_lock.acquire()
-        if self.heartbeat_timer:
-            self.heartbeat_timer.cancel()
-
-        self.heartbeat_period = interval
-        if interval > 0:
-            self.heartbeat_timer = threading.Timer(interval / 1000,
-                                               self.heartbeat_timer_tick)
-            self.heartbeat_timer.start()
-        self.timer_lock.release()
-
-    def refresh_error_heartbeat(self):
-        self.timer_lock.acquire()
-        if self.heartbeat_timer:
-            self.heartbeat_timer.cancel()
-            self.heartbeat_timer = threading.Timer(self.heartbeat_period / 1000,
-                                                   self.heartbeat_timer_tick)
-            self.heartbeat_timer.start()
-        self.timer_lock.release()
-
-    def stop_error_heartbeat(self):
-        self.timer_lock.acquire()
-        if self.heartbeat_timer:
-            self.heartbeat_timer.cancel()
-            self.heartbeat_timer = None
-        self.timer_lock.release()
-
-    def update_state(self, state):
-        if state != self.state:
-            self.state = state
-            if state == 'Connected':
-                with self.connected_condition:
-                    self.connected = True
-                    self.connected_condition.notify()
-                print('[error] connected')
-                for func in self.on_connected_changed:
-                    func(True)
-            elif self.connected:
-                with self.connected_condition:
-                    self.connected = False
-                    self.connected_condition.notify()
-                self.stop_error_heartbeat()
-                print('[error] disconnected')
-                for func in self.on_connected_changed:
-                    func(False)
-
-    def subscribe(self):
-        self.socket_state = 'Trying'
-
-        for channel in self.channels:
-            self.socket.setsockopt(zmq.SUBSCRIBE, channel)
-            self.subscriptions.add(channel)
-
-    def unsubscribe(self):
-        self.socket_state = 'Down'
-
-        for subscription in self.subscriptions:
-            self.socket.setsockopt(zmq.UNSUBSCRIBE, subscription)
-
-        self.subscriptions.clear()
-
-    def start(self):
-        self.socket_state = 'Trying'
-        self.update_state('Connecting')
-
-        if self.connect_sockets():
-            self.shutdown.clear()  # in case we already used the component
-            self.threads.append(threading.Thread(target=self.socket_worker))
-            for thread in self.threads:
-                thread.start()
-            self.subscribe()
-
-    def stop(self):
-        self.is_ready = False
-        self.shutdown.set()
-        for thread in self.threads:
-            thread.join()
-        self.threads = []
-        self.cleanup()
-        self.update_state('Disconnected')
-
-    def cleanup(self):
-        if self.connected:
-            self.unsubscribe()
-        self.disconnect_sockets()
-        self.subscriptions.clear()
-
-    def connect_sockets(self):
-        self.sockets_connected = True
-        self.socket.connect(self.error_uri)
-
-        return True
-
-    def disconnect_sockets(self):
-        if self.sockets_connected:
-            self.socket.disconnect(self.error_uri)
-            self.sockets_connected = False
-
-    def ready(self):
-        if not self.is_ready:
-            self.is_ready = True
-            self.start()
-
-
-class ApplicationFile():
+class ApplicationFile(object):
 
     def __init__(self, debug=True):
         self.debug = debug
