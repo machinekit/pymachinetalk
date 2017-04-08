@@ -14,17 +14,48 @@ import machinetalk.protobuf.types_pb2 as types
 #from machinetalk.protobuf.status_pb2 import *
 from machinetalk_core.application.statusbase import StatusBase
 
+ORIGIN_G54 = types.ORIGIN_G54
+ORIGIN_G55 = types.ORIGIN_G55
+ORIGIN_G56 = types.ORIGIN_G56
+ORIGIN_G57 = types.ORIGIN_G57
+ORIGIN_G58 = types.ORIGIN_G58
+ORIGIN_G59 = types.ORIGIN_G59
+ORIGIN_G59_1 = types.ORIGIN_G59_1
+ORIGIN_G59_2 = types.ORIGIN_G59_2
+ORIGIN_G59_3 = types.ORIGIN_G59_2
 
-INTERP_STATE_IDLE = types.EMC_TASK_INTERP_IDLE
-INTERP_STATE_READING = types.EMC_TASK_INTERP_READING
-INTERP_STATE_PAUSED = types.EMC_TASK_INTERP_PAUSED
-INTERP_STATE_WAITING = types.EMC_TASK_INTERP_WAITING
+FREE_MODE = types.EMC_TRAJ_MODE_FREE
+COORDINATED_MODE = types.EMC_TRAJ_MODE_COORD
+TELEOP_MODE = types.EMC_TRAJ_MODE_TELEOP
 
 MOTION_UNINITIALIZED = types.UNINITIALIZED_STATUS
 MOTION_DONE = types.RCS_DONE
 MOTION_EXEC = types.RCS_EXEC
 MOTION_ERROR = types.RCS_ERROR
 MOTION_RECEIVED = types.RCS_RECEIVED
+
+NONE_TYPE = types._EMC_MOTION_TYPE_NONE
+TRAVERSE_TYPE = types._EMC_MOTION_TYPE_TRAVERSE
+FEED_TYPE = types._EMC_MOTION_TYPE_FEED
+ARC_TYPE = types._EMC_MOTION_TYPE_ARC
+TOOLCHANGE_TYPE = types._EMC_MOTION_TYPE_TOOLCHANGE
+PROBING_TYPE = types._EMC_MOTION_TYPE_PROBING
+INDEX_ROTARY_TYPE = types._EMC_MOTION_TYPE_INDEXROTARY
+
+LINEAR_AXIS = types.EMC_AXIS_LINEAR
+ANGULAR_AXIS = types.EMC_AXIS_ANGULAR
+
+IDENTITY_KINEMATICS = types.KINEMATICS_IDENTITY
+FORWARD_ONLY_KINEMATICS = types.KINEMATICS_FORWARD_ONLY
+INVERSE_ONLY_KINEMATICS = types.KINEMATICS_INVERSE_ONLY
+BOTH_KINEMATICS = types.KINEMATICS_BOTH
+
+CANON_UNITS_INCH = types.CANON_UNITS_INCH
+CANON_UNITS_MM = types.CANON_UNITS_MM
+CANON_UNITS_CM = types.CANON_UNITS_CM
+
+TIME_UNITS_MINUTE = types.TIME_UNITS_MINUTE
+TIME_UNITS_SECOND = types.TIME_UNITS_SECOND
 
 TASK_ERROR = types.EMC_TASK_EXEC_ERROR
 TASK_DONE = types.EMC_TASK_EXEC_DONE
@@ -35,6 +66,33 @@ TASK_WAITING_FOR_MOTION_AND_IO = types.EMC_TASK_EXEC_WAITING_FOR_MOTION_AND_IO
 TASK_WAITING_FOR_DELAY = types.EMC_TASK_EXEC_WAITING_FOR_DELAY
 TASK_WAITING_FOR_SYSTEM_CMD = types.EMC_TASK_EXEC_WAITING_FOR_SYSTEM_CMD
 TASK_WAITING_FOR_SPINDLE_ORIENTED = types.EMC_TASK_EXEC_WAITING_FOR_SPINDLE_ORIENTED
+
+TASK_MODE_MANUAL = types.EMC_TASK_MODE_MANUAL
+TASK_MODE_AUTO = types.EMC_TASK_MODE_AUTO
+TASK_MODE_MDI = types.EMC_TASK_MODE_MDI
+
+TASK_STATE_ESTOP = types.EMC_TASK_STATE_ESTOP
+TASK_STATE_ESTOP_RESET = types.EMC_TASK_STATE_ESTOP_RESET
+TASK_STATE_OFF = types.EMC_TASK_STATE_OFF
+TASK_STATE_ON = types.EMC_TASK_STATE_ON
+
+INTERP_STATE_IDLE = types.EMC_TASK_INTERP_IDLE
+INTERP_STATE_READING = types.EMC_TASK_INTERP_READING
+INTERP_STATE_PAUSED = types.EMC_TASK_INTERP_PAUSED
+INTERP_STATE_WAITING = types.EMC_TASK_INTERP_WAITING
+
+INTERPRETER_EXIT_OK = types.EMC_INTERP_EXIT_OK
+INTERPRETER_EXIT_EXIT = types.EMC_INTERP_EXIT_EXIT
+INTERPRETER_EXIT_EXECUTE_FINISH = types.EMC_INTERP_EXIT_EXECUTE_FINISH
+INTERPRETER_EXIT_ENDFILE = types.EMC_INTERP_EXIT_ENDFILE
+INTERPRETER_EXIT_FILE_NOT_OPEN = types.EMC_INTERP_EXIT_FILE_NOT_OPEN
+INTERPRETER_EXIT_ERROR = types.EMC_INTERP_EXIT_ERROR
+
+RELATIVE_POSITION_OFFSET = types.EMC_CONFIG_RELATIVE_OFFSET
+MACHINE_POSITION_OFFSET = types.EMC_CONFIG_MACHINE_OFFSET
+
+ACTUAL_POSITION_FEEDBACK = types.EMC_CONFIG_ACTUAL_FEEDBACK
+COMMANDED_POSITION_FEEDBACK = types.EMC_CONFIG_COMMANDED_FEEDBACK
 
 RELEASE_BRAKE = 0
 ENGAGE_BRAKE = 1
@@ -49,15 +107,6 @@ SPINDLE_OFF = 2
 SPINDLE_DECREASE = 3
 SPINDLE_INCREASE = 4
 SPINDLE_CONSTANT = 5
-
-TASK_STATE_ESTOP = types.EMC_TASK_STATE_ESTOP
-TASK_STATE_ESTOP_RESET = types.EMC_TASK_STATE_ESTOP_RESET
-TASK_STATE_OFF = types.EMC_TASK_STATE_OFF
-TASK_STATE_ON = types.EMC_TASK_STATE_ON
-
-TASK_MODE_MANUAL = types.EMC_TASK_MODE_MANUAL
-TASK_MODE_AUTO = types.EMC_TASK_MODE_AUTO
-TASK_MODE_MDI = types.EMC_TASK_MODE_MDI
 
 NML_ERROR = types.MT_EMC_NML_ERROR
 NML_TEXT = types.MT_EMC_NML_TEXT
@@ -397,7 +446,7 @@ class ApplicationCommand():
                 thread.start()
             self.start_command_heartbeat()
             with self.tx_lock:
-                self.send_command_msg(MT_PING)
+                self.send_command_msg(types.MT_PING)
 
     def stop(self):
         self.is_ready = False
@@ -457,7 +506,7 @@ class ApplicationCommand():
             self.update_state('Timeout')
 
         with self.tx_lock:
-            self.send_command_msg(MT_PING)
+            self.send_command_msg(types.MT_PING)
 
         self.heartbeat_timer = threading.Timer(self.heartbeat_period / 1000,
                                              self.heartbeat_timer_tick)
@@ -486,7 +535,7 @@ class ApplicationCommand():
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_ABORT)
+            return self.send_command_msg(types.MT_EMC_TASK_ABORT)
 
     def run_program(self, line_number, interpreter='execute'):
         if not self.connected:
@@ -497,7 +546,7 @@ class ApplicationCommand():
             params.line_number = line_number
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_PLAN_RUN)
+            return self.send_command_msg(types.MT_EMC_TASK_PLAN_RUN)
 
     def pause_program(self, interpreter='execute'):
         if not self.connected:
@@ -506,7 +555,7 @@ class ApplicationCommand():
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_PLAN_PAUSE)
+            return self.send_command_msg(types.MT_EMC_TASK_PLAN_PAUSE)
 
     def step_program(self, interpreter='execute'):
         if not self.connected:
@@ -515,7 +564,7 @@ class ApplicationCommand():
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_PLAN_STEP)
+            return self.send_command_msg(types.MT_EMC_TASK_PLAN_STEP)
 
     def resume_program(self, interpreter='execute'):
         if not self.connected:
@@ -524,7 +573,7 @@ class ApplicationCommand():
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_PLAN_RESUME)
+            return self.send_command_msg(types.MT_EMC_TASK_PLAN_RESUME)
 
     def reset_program(self, interpreter='execute'):
         if not self.connected:
@@ -533,7 +582,7 @@ class ApplicationCommand():
         with self.tx_lock:
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_PLAN_INIT)
+            return self.send_command_msg(types.MT_EMC_TASK_PLAN_INIT)
 
     def set_task_mode(self, mode, interpreter='execute'):
         if not self.connected:
@@ -544,7 +593,7 @@ class ApplicationCommand():
             params.task_mode = mode
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_SET_MODE)
+            return self.send_command_msg(types.MT_EMC_TASK_SET_MODE)
 
     def set_task_state(self, state, interpreter='execute'):
         if not self.connected:
@@ -555,7 +604,7 @@ class ApplicationCommand():
             params.task_state = state
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_SET_STATE)
+            return self.send_command_msg(types.MT_EMC_TASK_SET_STATE)
 
     def open_program(self, file_name, interpreter='execute'):
         if not self.connected:
@@ -566,7 +615,7 @@ class ApplicationCommand():
             params.path = file_name
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_PLAN_OPEN)
+            return self.send_command_msg(types.MT_EMC_TASK_PLAN_OPEN)
 
     def execute_mdi(self, command, interpreter='execute'):
         if not self.connected:
@@ -577,7 +626,7 @@ class ApplicationCommand():
             params.command = command
             self.tx.interp_name = interpreter
 
-            return self.send_command_msg(MT_EMC_TASK_PLAN_EXECUTE)
+            return self.send_command_msg(types.MT_EMC_TASK_PLAN_EXECUTE)
 
     def set_spindle_brake(self, brake):
         if not self.connected:
@@ -585,9 +634,9 @@ class ApplicationCommand():
 
         with self.tx_lock:
             if brake == ENGAGE_BRAKE:
-                return self.send_command_msg(MT_EMC_SPINDLE_BRAKE_ENGAGE)
+                return self.send_command_msg(types.MT_EMC_SPINDLE_BRAKE_ENGAGE)
             elif brake == RELEASE_BRAKE:
-                return self.send_command_msg(MT_EMC_SPINDLE_BRAKE_RELEASE)
+                return self.send_command_msg(types.MT_EMC_SPINDLE_BRAKE_RELEASE)
 
     def set_debug_level(self, debug_level):
         if not self.connected:
@@ -598,7 +647,7 @@ class ApplicationCommand():
             params.debug_level = debug_level
             self.tx.interp_name = debug_level
 
-            return self.send_command_msg(MT_EMC_SET_DEBUG)
+            return self.send_command_msg(types.MT_EMC_SET_DEBUG)
 
     def set_feed_override(self, scale):
         if not self.connected:
@@ -608,7 +657,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.scale = scale
 
-            return self.send_command_msg(MT_EMC_TRAJ_SET_SCALE)
+            return self.send_command_msg(types.MT_EMC_TRAJ_SET_SCALE)
 
     def set_flood_enabled(self, enable):
         if not self.connected:
@@ -616,9 +665,9 @@ class ApplicationCommand():
 
         with self.tx_lock:
             if enable:
-                return self.send_command_msg(MT_EMC_COOLANT_FLOOD_ON)
+                return self.send_command_msg(types.MT_EMC_COOLANT_FLOOD_ON)
             else:
-                return self.send_command_msg(MT_EMC_COOLANT_FLOOD_OFF)
+                return self.send_command_msg(types.MT_EMC_COOLANT_FLOOD_OFF)
 
     def home_axis(self, index):
         if not self.connected:
@@ -628,7 +677,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.index = index
 
-            return self.send_command_msg(MT_EMC_AXIS_HOME)
+            return self.send_command_msg(types.MT_EMC_AXIS_HOME)
 
     def jog(self, jog_type, axis, velocity=0.0, distance=0.0):
         if not self.connected:
@@ -659,7 +708,7 @@ class ApplicationCommand():
             return None
 
         with self.tx_lock:
-            return self.send_command_msg(MT_EMC_TOOL_LOAD_TOOL_TABLE)
+            return self.send_command_msg(types.MT_EMC_TOOL_LOAD_TOOL_TABLE)
 
     def set_maximum_velocity(self, velocity):
         if not self.connected:
@@ -669,7 +718,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.velocity = velocity
 
-            return self.send_command_msg(MT_EMC_TRAJ_SET_MAX_VELOCITY)
+            return self.send_command_msg(types.MT_EMC_TRAJ_SET_MAX_VELOCITY)
 
     def set_mist_enabled(self, enable):
         if not self.connected:
@@ -677,16 +726,16 @@ class ApplicationCommand():
 
         with self.tx_lock:
             if enable:
-                return self.send_command_msg(MT_EMC_COOLANT_MIST_ON)
+                return self.send_command_msg(types.MT_EMC_COOLANT_MIST_ON)
             else:
-                return self.send_command_msg(MT_EMC_COOLANT_MIST_OFF)
+                return self.send_command_msg(types.MT_EMC_COOLANT_MIST_OFF)
 
     def override_limits(self):
         if not self.connected:
             return None
 
         with self.tx_lock:
-            return self.send_command_msg(MT_EMC_AXIS_OVERRIDE_LIMITS)
+            return self.send_command_msg(types.MT_EMC_AXIS_OVERRIDE_LIMITS)
 
     def set_adaptive_feed_enabled(self, enable):
         if not self.connected:
@@ -696,7 +745,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.enable = enable
 
-            return self.send_command_msg(MT_EMC_MOTION_ADAPTIVE)
+            return self.send_command_msg(types.MT_EMC_MOTION_ADAPTIVE)
 
     def set_analog_output(self, index, value):
         if not self.connected:
@@ -707,7 +756,7 @@ class ApplicationCommand():
             params.index = index
             params.value = value
 
-            return self.send_command_msg(MT_EMC_MOTION_SET_AOUT)
+            return self.send_command_msg(types.MT_EMC_MOTION_SET_AOUT)
 
     def set_block_delete_enabled(self, enable):
         if not self.connected:
@@ -717,7 +766,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.enable = enable
 
-            return self.send_command_msg(MT_EMC_TASK_PLAN_SET_BLOCK_DELETE)
+            return self.send_command_msg(types.MT_EMC_TASK_PLAN_SET_BLOCK_DELETE)
 
     def set_digital_output(self, index, enable):
         if not self.connected:
@@ -728,7 +777,7 @@ class ApplicationCommand():
             params.index = index
             params.enable = enable
 
-            return self.send_command_msg(MT_EMC_MOTION_SET_DOUT)
+            return self.send_command_msg(types.MT_EMC_MOTION_SET_DOUT)
 
     def set_feed_hold_enabled(self, enable):
         if not self.connected:
@@ -738,7 +787,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.enable = enable
 
-            return self.send_command_msg(MT_EMC_TRAJ_SET_FH_ENABLE)
+            return self.send_command_msg(types.MT_EMC_TRAJ_SET_FH_ENABLE)
 
     def set_feed_override_enabled(self, enable):
         if not self.connected:
@@ -748,7 +797,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.enable = enable
 
-            return self.send_command_msg(MT_EMC_TRAJ_SET_FO_ENABLE)
+            return self.send_command_msg(types.MT_EMC_TRAJ_SET_FO_ENABLE)
 
     def set_axis_max_position_limit(self, axis, value):
         if not self.connected:
@@ -759,7 +808,7 @@ class ApplicationCommand():
             params.index = axis
             params.value = value
 
-            return self.send_command_msg(MT_EMC_AXIS_SET_MAX_POSITION_LIMIT)
+            return self.send_command_msg(types.MT_EMC_AXIS_SET_MAX_POSITION_LIMIT)
 
     def set_axis_min_position_limit(self, axis, value):
         if not self.connected:
@@ -770,7 +819,7 @@ class ApplicationCommand():
             params.index = axis
             params.value = value
 
-            self.send_command_msg(MT_EMC_AXIS_SET_MIN_POSITION_LIMIT)
+            self.send_command_msg(types.MT_EMC_AXIS_SET_MIN_POSITION_LIMIT)
 
     def set_optional_stop_enabled(self, enable):
         if not self.connected:
@@ -780,7 +829,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.enable = enable
 
-            return self.send_command_msg(MT_EMC_TASK_PLAN_SET_OPTIONAL_STOP)
+            return self.send_command_msg(types.MT_EMC_TASK_PLAN_SET_OPTIONAL_STOP)
 
     def set_spindle_override_enabled(self, enable):
         if not self.connected:
@@ -790,7 +839,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.enable = enable
 
-            return self.send_command_msg(MT_EMC_TRAJ_SET_SO_ENABLE)
+            return self.send_command_msg(types.MT_EMC_TRAJ_SET_SO_ENABLE)
 
     def set_spindle(self, mode, velocity=0.0):
         if not self.connected:
@@ -827,7 +876,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.scale = scale
 
-            return self.send_command_msg(MT_EMC_TRAJ_SET_SPINDLE_SCALE)
+            return self.send_command_msg(types.MT_EMC_TRAJ_SET_SPINDLE_SCALE)
 
     def set_teleop_enabled(self, enable):
         if not self.connected:
@@ -837,7 +886,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.enable = enable
 
-            return self.send_command_msg(MT_EMC_TRAJ_SET_TELEOP_ENABLE)
+            return self.send_command_msg(types.MT_EMC_TRAJ_SET_TELEOP_ENABLE)
 
     def set_teleop_vector(self, a, b, c, u, v, w):
         if not self.connected:
@@ -853,7 +902,7 @@ class ApplicationCommand():
             pose.v = v
             pose.w = w
 
-            return self.send_command_msg(MT_EMC_TRAJ_SET_TELEOP_VECTOR)
+            return self.send_command_msg(types.MT_EMC_TRAJ_SET_TELEOP_VECTOR)
 
     def set_tool_offset(self, index, zoffset, xoffset, diameter, frontangle, backangle, orientation):
         if not self.connected:
@@ -870,7 +919,7 @@ class ApplicationCommand():
             tooldata.backangle = backangle
             tooldata.orientation = orientation
 
-            return self.send_command_msg(MT_EMC_TOOL_SET_OFFSET)
+            return self.send_command_msg(types.MT_EMC_TOOL_SET_OFFSET)
 
     def set_trajectory_mode(self, mode):
         if not self.connected:
@@ -880,7 +929,7 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.traj_mode = mode
 
-            return self.send_command_msg(MT_EMC_TRAJ_SET_MODE)
+            return self.send_command_msg(types.MT_EMC_TRAJ_SET_MODE)
 
     def unhome_axis(self, index):
         if not self.connected:
@@ -890,14 +939,14 @@ class ApplicationCommand():
             params = self.tx.emc_command_params
             params.index = index
 
-            return self.send_command_msg(MT_EMC_AXIS_UNHOME)
+            return self.send_command_msg(types.MT_EMC_AXIS_UNHOME)
 
     def shutdown(self):
         if not self.connected:
             return None
 
         with self.tx_lock:
-            return self.send_command_msg(MT_SHUTDOWN)
+            return self.send_command_msg(types.MT_SHUTDOWN)
 
 
 class ApplicationError():
