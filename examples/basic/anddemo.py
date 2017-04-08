@@ -1,4 +1,4 @@
-#/usr/bin/env python
+#!/usr/bin/env python
 
 import time
 import sys
@@ -19,12 +19,21 @@ class BasicClass():
 
         self.halrcompReady = False
         self.halrcmdReady = False
-        halrcomp = halremote.RemoteComponent('anddemo')
+        halrcomp = halremote.RemoteComponent('anddemo', debug=False)
         halrcomp.newpin('button0', halremote.HAL_BIT, halremote.HAL_OUT)
         halrcomp.newpin('button1', halremote.HAL_BIT, halremote.HAL_OUT)
-        halrcomp.newpin('led', halremote.HAL_BIT, halremote.HAL_IN)
+        led_pin = halrcomp.newpin('led', halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp.no_create = True
+        led_pin.on_value_changed.append(self.led_pin_changed)
+        led_pin.on_synced_changed.append(self.led_pin_synced)
         self.halrcomp = halrcomp
+
+    def led_pin_synced(self, synced):
+        if synced:
+            print("LED pin synced")
+
+    def led_pin_changed(self, value):
+        print('LED pin value changed: %s' % str(value))
 
     def start_sd(self, uuid):
         halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)

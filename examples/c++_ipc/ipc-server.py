@@ -101,7 +101,7 @@ class IPCServer():
             self.send_msg(identity, IPC_POSITION)
 
         elif self.rx.type == IPC_JOG:
-            self.command.set_task_mode(application.TASK_MODE_MANUAL)
+            self.command.set_task_mode(application.EMC_TASK_MODE_MANUAL)
             self.command.jog(self.rx.jog_type, self.rx.axis,
                              self.rx.velocity, self.rx.distance)
 

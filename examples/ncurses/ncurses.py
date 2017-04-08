@@ -22,7 +22,7 @@ else:
     import ConfigParser as configparser
 
 
-class TestClass():
+class TerminalUI(object):
     def __init__(self, uuid, use_curses):
         self.halrcmdReady = False
         self.halrcompReady = False
@@ -32,15 +32,15 @@ class TestClass():
         halrcomp.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp = halrcomp
 
-        halrcomp2 = halremote.RemoteComponent(name='test2')
+        halrcomp2 = halremote.RemoteComponent(name='test2', debug=False)
         halrcomp2.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp2.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp2 = halrcomp2
 
-        self.status = ApplicationStatus()
-        self.command = ApplicationCommand()
-        self.error = ApplicationError()
-        self.fileservice = ApplicationFile()
+        self.status = ApplicationStatus(debug=False)
+        self.command = ApplicationCommand(debug=False)
+        self.error = ApplicationError(debug=False)
+        self.fileservice = ApplicationFile(debug=True)
         self.fileservice.local_file_path = 'test.ngc'
         self.fileservice.local_path = './ngc/'
         self.fileservice.remote_path = '/home/xy/'
@@ -101,7 +101,6 @@ class TestClass():
         print('connecting rcomp %s' % self.halrcomp.name)
         self.halrcomp.ready()
         self.halrcomp2.ready()
-        #gevent.spawn(self.start_timer)
 
     def halrcmd_discovered(self, data):
         print("discovered %s %s" % (data.name, data.dsn))
@@ -123,6 +122,8 @@ class TestClass():
         print('discovered %s %s' % (data.name, data.dsn))
         self.status.status_uri = data.dsn
         self.status.ready()
+        if self.timer:
+            self.timer.cancel()
         self.timer = threading.Timer(0.1, self.status_timer)
         self.timer.start()
 
@@ -160,12 +161,6 @@ class TestClass():
 
     def file_disappeared(self, data):
         print('%s disappeared' % data.name)
-
-    def start_timer(self):
-        self.toggle_pin()
-        timer = threading.Timer(1.0, self.start_timer)
-        timer.start()
-        #glib.timeout_add(1000, self.toggle_pin)
 
     def status_timer(self):
         #if self.status.synced:
@@ -205,8 +200,8 @@ class TestClass():
         status.clear()
         status.border(0)
         status.addstr(1, 2, 'Status')
-        status.addstr(3, 4, 'Estop: %s' % str(self.status.task.task_state == application.TASK_STATE_ESTOP))
-        status.addstr(4, 4, 'Power: %s' % str(self.status.task.task_state == application.TASK_STATE_ON))
+        status.addstr(3, 4, 'Estop: %s' % str(self.status.task.task_state == application.EMC_TASK_STATE_ESTOP))
+        status.addstr(4, 4, 'Power: %s' % str(self.status.task.task_state == application.EMC_TASK_STATE_ON))
         status.refresh()
 
         cmd = self.command_window
@@ -241,17 +236,17 @@ class TestClass():
         self.screen.nodelay(True)
         c = self.screen.getch()
         if c == curses.KEY_F1:
-            if self.status.task.task_state == application.TASK_STATE_ESTOP:
-                ticket = self.command.set_task_state(application.TASK_STATE_ESTOP_RESET)
+            if self.status.task.task_state == application.EMC_TASK_STATE_ESTOP:
+                ticket = self.command.set_task_state(application.EMC_TASK_STATE_ESTOP_RESET)
+                self.command.wait_completed(ticket=ticket, timeout=0.2)
+            else:
+                self.command.set_task_state(application.EMC_TASK_STATE_ESTOP)
                 self.command.wait_completed(timeout=0.2)
-            else:
-                self.command.set_task_state(application.TASK_STATE_ESTOP)
-                self.command.wait_completed()
         elif c == curses.KEY_F2:
-            if self.status.task.task_state == application.TASK_STATE_ON:
-                self.command.set_task_state(application.TASK_STATE_OFF)
+            if self.status.task.task_state == application.EMC_TASK_STATE_ON:
+                self.command.set_task_state(application.EMC_TASK_STATE_OFF)
             else:
-                self.command.set_task_state(application.TASK_STATE_ON)
+                self.command.set_task_state(application.EMC_TASK_STATE_ON)
         elif c == curses.KEY_F3:
             self.fileservice.start_upload()
 
@@ -289,7 +284,7 @@ def main():
     # remote = mki.getint("MACHINEKIT", "REMOTE")
 
     gobject.threads_init()  # important: initialize threads if gobject main loop is used
-    test = TestClass(uuid=uuid, use_curses=True)
+    test = TerminalUI(uuid=uuid, use_curses=True)
     loop = gobject.MainLoop()
     try:
         loop.run()
@@ -304,7 +299,7 @@ def main():
 
     # wait for all threads to terminate
     while threading.active_count() > 1:
-        time.sleep(0.1)
+        time.sleep(0.5)
 
     print("threads stopped")
     sys.exit(0)
