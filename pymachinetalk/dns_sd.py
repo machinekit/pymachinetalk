@@ -1,217 +1,100 @@
-import sys
-import avahi
-import dbus
-import pprint
-import avahi.ServiceTypeDatabase
-import dbus.glib
-import threading
+from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
 
 
-class ServiceTypeDatabase:
-    def __init__(self):
-        self.pretty_name = avahi.ServiceTypeDatabase.ServiceTypeDatabase()
-
-    def get_human_type(self, servicetype):
-        if str(servicetype) in self.pretty_name:
-            return self.pretty_name[servicetype]
-        else:
-            return servicetype
-
-
-class ServiceData():
-    def __init__(self):
-        self.uuid = ''
-        self.dsn = ''
-        self.name = ''
-        self.txts = []
-
-
-class ServiceDiscovery():
-    def __init__(self, service_type, uuid='', interface='', debug=False):
-        self.discovered_condition = threading.Condition(threading.Lock())
-        self.disappeared_condition = threading.Condition(threading.Lock())
-
-        # callbacks
-        self.on_discovered = []
-        self.on_disappeared = []
-        self.on_error = []
-
-        self.server = None
-        # Start Service Discovery
-        self.debug = debug
+class Service(object):
+    def __init__(self, type_=''):
+        self.type = type_
         self.domain = ''
+        self.base_type = ''
+        self.protocol = ''
+        self.name = ''
+        self.uri = ''
+        self.uuid = ''
+        self.version = 0
+        self.ready = False
+
+        self.service_infos = []
+
+    def matches_service_info(self, info):
+        return self.type == info.properties['service']
+
+    def __eq__(self, other):
+        if isinstance(other, ServiceInfo):
+            return self.name == other.name
+        return False
+
+    def add_service_info(self, info):
+        self.service_infos.append(info)
+        self._update()
+
+    def remove_service_info(self, info):
+        for info in self.service_infos:
+            if self == info:
+                self.service_infos.remove(info)
+                break
+        self._update()
+
+    def _update(self):
+        if len(self.service_infos) > 0:
+            self.ready = True
+            info = self.service_infos[0]
+            self.name = info.name
+            self.uri = info.properties['uri']
+        else:
+            self.ready = False
+
+
+class ServiceDiscovery(object):
+    def __init__(self, uuid='', service_type='machinekit'):
         self.service_type = service_type
-        self.service_names = {}  # used once discovered
-        self.uuid = uuid
-        self.interface = interface
-        try:
-            self.system_bus = dbus.SystemBus()
-            self.system_bus.add_signal_receiver(self.avahi_dbus_connect_cb, "NameOwnerChanged", "org.freedesktop.DBus", arg0="org.freedesktop.Avahi")
-        except dbus.DBusException, e:
-            pprint.pprint(e)
-            sys.exit(1)
 
-        self.service_browsers = {}
+        self.is_ready = False
+        self.services = []
+        self.browser = None
 
-    def wait_discovered(self, timeout=None):
-        with self.discovered_condition:
-            if len(self.service_names) > 0:
-                return True
-            self.discovered_condition.wait(timeout=timeout)
-            return (len(self.service_names) > 0)
+    def _start_discovery(self):
+        zeroconf = Zeroconf()
+        type_string = '_%s._tcp.local.' % self.service_type
+        self.browser = ServiceBrowser(zeroconf, type_string, self)
 
-    def wait_disappeared(self, timeout=None):
-        with self.disappeared_condition:
-            if len(self.service_names) == 0:
-                return True
-            self.disappeared_condition.wait(timeout=timeout)
-            return (len(self.service_names) == 0)
+    def _stop_discovery(self):
+        pass
+
+    def remove_service(self, zeroconf, type, name):
+        info = zeroconf.get_service_info(type, name)
+        for service in self.services:
+            if service.matches_service_info(info):
+                service.remove_service_info(info)
+
+    def add_service(self, zeroconf, type, name):
+        info = zeroconf.get_service_info(type, name)
+        for service in self.services:
+            if service.matches_service_info(info):
+                service.add_service_info(info)
+
+    def register(self, item):
+        if isinstance(item, Discoverable):
+            for service in item.services:
+                self.services.append(service)
+        elif isinstance(item, Service):
+            self.services.append(item)
+        else:
+            raise TypeError('passed unregisterable item')
 
     def start(self):
-        self.start_service_discovery()
+        if not self.browser:
+            self._start_discovery()
 
     def stop(self):
-        self.stop_service_discovery()
+        if self.browser:
+            self._stop_discovery()
 
-    def avahi_dbus_connect_cb(self, a, connect, disconnect):
-        if connect != "":
-            print "We are disconnected from avahi-daemon"
-            self.stop_service_discovery()
-        else:
-            print "We are connected to avahi-daemon"
-            self.start_service_discovery()
+    def ready(self):
+        if not self.is_ready:
+            self.is_ready = True
+            self.start()
 
-    def siocgifname(self, interface):
-        if interface <= 0:
-            return "any"
-        else:
-            return self.server.GetNetworkInterfaceNameByIndex(interface)
 
-    def service_resolved(self, interface, protocol, name, servicetype, domain, host, aprotocol, address, port, txt, flags):
-        del aprotocol
-        del flags
-        stdb = ServiceTypeDatabase()
-        h_type = stdb.get_human_type(servicetype)
-        if self.debug:
-            print "Service data for service '%s' of type '%s' (%s) in domain '%s' on %s.%i:" % (name, h_type, servicetype, domain, self.siocgifname(interface), protocol)
-            print "\tHost %s (%s), port %i, TXT data: %s" % (host, address, port, avahi.txt_array_to_string_array(txt))
-
-        txts = avahi.txt_array_to_string_array(txt)
-        match = False
-        dsn = None
-        uuid = None
-        for txt in txts:
-            key, value = txt.split('=')
-            if key == 'dsn':
-                dsn = value
-            elif key == 'uuid':
-                uuid = value
-                match = self.uuid == value
-        match = match or (self.uuid == '')
-
-        if match:
-            data = ServiceData()
-            data.name = name
-            data.dsn = dsn
-            data.uuid = uuid
-            data.txts = txts
-            with self.discovered_condition:
-                self.service_names[name] = data
-                self.discovered_condition.notify()
-            if self.debug:
-                print('discovered: %s %s %s' % (name, dsn, uuid))
-            for func in self.on_discovered:
-                func(data)
-
-    def print_error(self, err):
-        if self.debug:
-            print("SD Error: %s" % str(err))
-        for func in self.on_error:
-            func(str(err))
-
-    def new_service(self, interface, protocol, name, servicetype, domain, flags):
-        del flags
-        if self.debug:
-            print "Found service '%s' of type '%s' in domain '%s' on %s.%i." % (name, servicetype, domain, self.siocgifname(interface), protocol)
-
-# this check is for local services
-#        try:
-#            if flags & avahi.LOOKUP_RESULT_LOCAL:
-#                return
-#        except dbus.DBusException:
-#            pass
-
-        self.server.ResolveService(interface, protocol, name, servicetype, domain, avahi.PROTO_INET, dbus.UInt32(0), reply_handler=self.service_resolved, error_handler=self.print_error)
-
-    def remove_service(self, interface, protocol, name, servicetype, domain, flags):
-        del flags
-        if self.debug:
-            print "Service '%s' of type '%s' in domain '%s' on %s.%i disappeared." % (name, servicetype, domain, self.siocgifname(interface), protocol)
-        if name in self.service_names:
-            with self.disappeared_condition:
-                data = self.service_names.pop(name)
-                self.disappeared_condition.notify()
-            if self.debug:
-                print("disappered: %s" % name)
-            for func in self.on_disappeared:
-                func(data)
-
-    def add_service_type(self, interface, protocol, servicetype, domain):
-        # Are we already browsing this domain for this type?
-        if self.service_browsers in (interface, protocol, servicetype, domain):
-            return
-
-        if self.debug:
-            print "Browsing for services of type '%s' in domain '%s' on %s.%i ..." % (servicetype, domain, self.siocgifname(interface), protocol)
-
-        b = dbus.Interface(self.system_bus.get_object(avahi.DBUS_NAME,
-                                                      self.server.ServiceBrowserNew(interface, protocol, servicetype, domain, dbus.UInt32(0))),
-                           avahi.DBUS_INTERFACE_SERVICE_BROWSER)
-        b.connect_to_signal('ItemNew', self.new_service)
-        b.connect_to_signal('ItemRemove', self.remove_service)
-
-        self.service_browsers[(interface, protocol, servicetype, domain)] = b
-
-    def del_service_type(self, interface, protocol, servicetype, domain):
-
-        service = (interface, protocol, servicetype, domain)
-        if self.service_browsers not in service:
-            return
-        sb = self.service_browsers[service]
-        try:
-            sb.Free()
-        except dbus.DBusException:
-            pass
-        del self.service_browsers[service]
-
-    def start_service_discovery(self):
-        if len(self.domain) != 0:
-            print "domain not null %s" % (self.domain)
-            print("Already Discovering")
-            return
-        try:
-            self.server = dbus.Interface(self.system_bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER),
-                                         avahi.DBUS_INTERFACE_SERVER)
-            self.domain = self.server.GetDomainName()
-        except:
-            print "Check that the Avahi daemon is running!"
-            return
-
-        if self.debug:
-            print "Starting discovery"
-
-        if self.interface == "":
-            interface = avahi.IF_UNSPEC
-        else:
-            interface = self.server.GetNetworkInterfaceIndexByName(self.interface)
-        protocol = avahi.PROTO_INET
-
-        self.add_service_type(interface, protocol, self.service_type, self.domain)
-
-    def stop_service_discovery(self):
-        if len(self.domain) == 0:
-            print "Discovery already stopped"
-            return
-
-        if self.debug:
-            print "Discovery stopped"
+class Discoverable(object):
+    def __init__(self):
+        self.services = []
