@@ -32,8 +32,10 @@ from distutils.spawn import find_executable
 
 if __name__ == '__main__':
     setup(name="pymachinetalk",
-          version="1.0",
+          version="0.9.0",
           description="Python bindings for Machinetalk",
+          author="Alexander Roessler",
+          author_email="alex@machinekoder.com",
           url="https://github.com/machinekit/pymachinetalk",
           namespace_packages=['pymachinetalk'],
           packages=find_packages(),
