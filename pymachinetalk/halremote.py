@@ -1,4 +1,5 @@
 import threading
+from dns_sd import Discoverable, Service
 
 # protobuf
 from machinetalk.protobuf.message_pb2 import Container
@@ -75,9 +76,10 @@ class Pin(object):
         return self.value
 
 
-class RemoteComponent(RemoteComponentBase):
+class RemoteComponent(RemoteComponentBase, Discoverable):
     def __init__(self, name, debug=False):
-        super(RemoteComponent, self).__init__(debuglevel=int(debug))
+        RemoteComponentBase.__init__(self, debuglevel=int(debug))
+        Discoverable.__init__(self)
         self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug
 
@@ -87,7 +89,6 @@ class RemoteComponent(RemoteComponentBase):
         self.name = name
         self.pinsbyname = {}
         self.pinsbyhandle = {}
-        self.is_ready = False
         self.no_create = False
         self.no_bind = False
 
@@ -95,6 +96,23 @@ class RemoteComponent(RemoteComponentBase):
 
         # more efficient to reuse a protobuf message
         self.tx = Container()
+
+        self._halrcomp_service = Service(type_='halrcomp')
+        self._halrcmd_service = Service(type_='halrcmd')
+        self.add_service(self._halrcomp_service)
+        self.add_service(self._halrcmd_service)
+        self.on_services_ready_changed_cb.append(self._on_services_ready_changed)
+
+    def _on_services_ready_changed(self, ready):
+        if ready:
+            self.halrcomp_uri = self._halrcomp_service.uri
+            self.halrcmd_uri = self._halrcmd_service.uri
+            self.start()
+        else:
+            self.stop()
+
+    def ready(self):
+        self.start()
 
     def wait_connected(self, timeout=None):
         with self.connected_condition:
@@ -178,11 +196,6 @@ class RemoteComponent(RemoteComponentBase):
 
     def getpin(self, name):
         return self.pinsbyname[name]
-
-    def ready(self):
-        if not self.is_ready:
-            self.is_ready = True
-            self.start()
 
     def pin_update(self, rpin, lpin):
         if rpin.HasField('halfloat'):
