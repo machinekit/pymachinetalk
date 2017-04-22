@@ -1,14 +1,11 @@
-import uuid
-import platform
 import os
 from urlparse import urlparse
 import ftplib
-
-import zmq
 import threading
+from dns_sd import ServiceContainer, Service
 
 # protobuf
-from common import MessageObject, recurse_descriptor, recurse_message
+from common import MessageObject, recurse_descriptor, recurse_message, ComponentBase
 from machinetalk.protobuf.message_pb2 import Container
 import machinetalk.protobuf.types_pb2 as types
 import machinetalk.protobuf.motcmds_pb2 as motcmds
@@ -63,10 +60,12 @@ OPERATOR_TEXT = types.MT_EMC_OPERATOR_TEXT
 OPERATOR_DISPLAY = types.MT_EMC_OPERATOR_DISPLAY
 
 
-class ApplicationStatus(StatusBase):
+class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
 
     def __init__(self, debug=False):
-        super(ApplicationStatus, self).__init__(debuglevel=int(debug))
+        ComponentBase.__init__(self)
+        StatusBase.__init__(self, debuglevel=int(debug))
+        ServiceContainer.__init__(self)
         self.config_condition = threading.Condition(threading.Lock())
         self.io_condition = threading.Condition(threading.Lock())
         self.motion_condition = threading.Condition(threading.Lock())
@@ -74,7 +73,6 @@ class ApplicationStatus(StatusBase):
         self.interp_condition = threading.Condition(threading.Lock())
         self.synced_condition = threading.Condition(threading.Lock())
         self.debug = debug
-        self.is_ready = False
 
         # callbacks
         self.on_synced_changed = []
@@ -98,6 +96,13 @@ class ApplicationStatus(StatusBase):
         self._synced_channels = set()
         self.channels = set(['motion', 'config', 'task', 'io', 'interp'])
 
+        self._status_service = Service(type_='service')
+        self.add_service(self._status_service)
+        self.on_services_ready_changed.append(self._on_services_ready_changed)
+
+    def _on_services_ready_changed(self, ready):
+        self.status_uri = self._status_service.uri
+        self.ready = ready
 
     # make sure locks are used when accessing properties
     # should we return a copy instead of the reference?
@@ -152,11 +157,6 @@ class ApplicationStatus(StatusBase):
     def wait_interp_updated(self, timeout=None):
         with self.interp_condition:
             self.interp_condition.wait(timeout=timeout)
-
-    def ready(self):
-        if not self.is_ready:
-            self.is_ready = True
-            self.start()
 
     def emcstat_full_update_received(self, topic, rx):
         self._emcstat_update_received(topic, rx)
@@ -257,15 +257,16 @@ class ApplicationStatus(StatusBase):
         self.running = running
 
 
-class ApplicationCommand(CommandBase):
+class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
 
     def __init__(self, debug=False):
-        super(ApplicationCommand, self).__init__(debuglevel=int(debug))
+        ComponentBase.__init__(self)
+        CommandBase.__init__(self, debuglevel=int(debug))
+        ServiceContainer.__init__(self)
         self.completed_condition = threading.Condition(threading.Lock())
         self.executed_condition = threading.Condition(threading.Lock())
         self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug
-        self.is_ready = False
 
         # callbacks
         self.on_connected_changed = []
@@ -280,6 +281,14 @@ class ApplicationCommand(CommandBase):
 
         # more efficient to reuse a protobuf message
         self._tx = Container()
+
+        self._command_service = Service(type_='command')
+        self.add_service(self._command_service)
+        self.on_services_ready_changed.append(self._on_services_ready_changed)
+
+    def _on_services_ready_changed(self, ready):
+        self.command_uri = self._command_service.uri
+        self.ready = ready
 
     def emccmd_executed_received(self, rx):
         with self.executed_condition:
@@ -325,11 +334,6 @@ class ApplicationCommand(CommandBase):
                 return True
             self.connected_condition.wait(timeout=timeout)
             return self.connected
-
-    def ready(self):
-        if not self.is_ready:
-            self.is_ready = True
-            self.start()
 
     # slot
     def set_connected(self):
@@ -769,13 +773,14 @@ class ApplicationCommand(CommandBase):
         return self._take_ticket()
 
 
-class ApplicationError(ErrorBase):
+class ApplicationError(ComponentBase, ErrorBase, ServiceContainer):
     def __init__(self, debug=False):
-        super(ApplicationError, self).__init__(debuglevel=int(debug))
+        ComponentBase.__init__(self)
+        ErrorBase.__init__(self, debuglevel=int(debug))
+        ServiceContainer.__init__(self)
         self.message_lock = threading.Lock()
         self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug
-        self.is_ready = False
 
         # callbacks
         self.on_connected_changed = []
@@ -783,6 +788,15 @@ class ApplicationError(ErrorBase):
         self.connected = False
         self.channels = set(['error', 'text', 'display'])
         self.error_list = []
+        self._ready = False
+
+        self._error_service = Service(type_='error')
+        self.add_service(self._error_service)
+        self.on_services_ready_changed.append(self._on_services_ready_changed)
+
+    def _on_services_ready_changed(self, ready):
+        self.error_uri = self._error_service.uri
+        self.ready = ready
 
     def wait_connected(self, timeout=None):
         with self.connected_condition:
@@ -790,11 +804,6 @@ class ApplicationError(ErrorBase):
                 return True
             self.connected_condition.wait(timeout=timeout)
             return self.connected
-
-    def ready(self):
-        if not self.is_ready:
-            self.is_ready = True
-            self.start()
 
     def emc_nml_error_received(self, _, rx):
         self._error_message_received(rx)
@@ -850,14 +859,15 @@ class ApplicationError(ErrorBase):
             return messages
 
 
-class ApplicationFile(object):
+class ApplicationFile(ServiceContainer):
 
     def __init__(self, debug=True):
+        ServiceContainer.__init__(self)
         self.debug = debug
         self.state_condition = threading.Condition(threading.Lock())
         self.file_list_lock = threading.Lock()
 
-        self.uri = ''
+        self.file_uri = ''
         self.local_file_path = ''
         self.remote_file_path = ''
         self.local_path = ''
@@ -867,8 +877,17 @@ class ApplicationFile(object):
         self.bytes_total = 0.0
         self.progress = 0.0
         self.file = None
+        self.ready = False
 
         self._file_list = []
+
+        self._file_service = Service(type_='file')
+        self.add_service(self._file_service)
+        self.on_services_ready_changed.append(self._on_services_ready_changed)
+
+    def _on_services_ready_changed(self, ready):
+        self.file_uri = self._file_service.uri
+        self.ready = ready
 
     @property
     def file_list(self):
@@ -876,7 +895,7 @@ class ApplicationFile(object):
             return self._file_list
 
     def upload_worker(self):
-        o = urlparse(self.uri)
+        o = urlparse(self.file_uri)
         # test o.scheme
 
         filename = os.path.basename(self.local_file_path)
@@ -914,7 +933,7 @@ class ApplicationFile(object):
             print('[file] upload of %s finished' % filename)
 
     def download_worker(self):
-        o = urlparse(self.uri)
+        o = urlparse(self.file_uri)
         # test o.scheme
 
         filename = self.remote_file_path[len(self.remote_path):]  # mid
@@ -956,7 +975,7 @@ class ApplicationFile(object):
             print('[file] download of %s finished' % filename)
 
     def refresh_files_worker(self):
-        o = urlparse(self.uri)
+        o = urlparse(self.file_uri)
         # test o.scheme
 
         self.update_state('RefreshRunning')  # lets start the upload
@@ -980,7 +999,7 @@ class ApplicationFile(object):
             print('[file] file refresh finished')
 
     def remove_file_worker(self, filename):
-        o = urlparse(self.uri)
+        o = urlparse(self.file_uri)
         # test o.scheme
 
         self.update_state('RemoveRunning')  # lets start the upload
@@ -1010,7 +1029,7 @@ class ApplicationFile(object):
 
     def start_upload(self):
         with self.state_condition:
-            if self.transfer_state != 'NoTransfer':
+            if not self.ready or self.transfer_state != 'NoTransfer':
                 return
 
         thread = threading.Thread(target=self.upload_worker)
@@ -1018,7 +1037,7 @@ class ApplicationFile(object):
 
     def start_download(self):
         with self.state_condition:
-            if self.transfer_state != 'NoTransfer':
+            if not self.ready or self.transfer_state != 'NoTransfer':
                 return
 
         thread = threading.Thread(target=self.download_worker)
@@ -1026,7 +1045,7 @@ class ApplicationFile(object):
 
     def refresh_files(self):
         with self.state_condition:
-            if self.transfer_state != 'NoTransfer':
+            if not self.ready or self.transfer_state != 'NoTransfer':
                 return
 
         thread = threading.Thread(target=self.refresh_files_worker)
@@ -1034,14 +1053,14 @@ class ApplicationFile(object):
 
     def remove_file(self, name):
         with self.state_condition:
-            if self.transfer_state != 'NoTransfer':
+            if not self.ready or self.transfer_state != 'NoTransfer':
                 return
 
         thread = threading.Thread(target=self.remove_file_worker, args=(name, ))
         thread.start()
 
     def abort(self):
-        pass
+        raise NotImplementedError('not implemented')
 
     def wait_completed(self, timeout=None):
         with self.state_condition:
@@ -1062,4 +1081,4 @@ class ApplicationFile(object):
         print('[file] error: %s %s' % (error, description))
 
     def clear_error(self):
-        pass
+        raise NotImplementedError('not implemented')

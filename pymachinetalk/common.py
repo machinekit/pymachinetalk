@@ -1,5 +1,3 @@
-
-
 class MessageObject():
     def __init__(self):
         self.is_position = False
@@ -97,3 +95,24 @@ def recurse_message(message, obj, field_filter=''):
                         recurse_message(sub_message, sub_obj)
                         value = sub_obj
                     array[index] = value
+
+
+class ComponentBase(object):
+    def __init__(self):
+        self._ready = False
+
+    @property
+    def ready(self):
+        return self._ready
+
+    @ready.setter
+    def ready(self, ready):
+        if ready is self._ready:
+            return
+
+        self._ready = ready
+        if ready:
+            self.start()
+        else:
+            self.stop()
+

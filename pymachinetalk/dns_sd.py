@@ -16,7 +16,7 @@ class Service(object):
         self.service_infos = []
 
         # callback
-        self.on_ready_changed_cb = []
+        self.on_ready_changed = []
 
     @property
     def ready(self):
@@ -26,7 +26,7 @@ class Service(object):
     def ready(self, value):
         if value != self._ready:
             self._ready = value
-            for cb in self.on_ready_changed_cb:
+            for cb in self.on_ready_changed:
                 cb(value)
 
     @property
@@ -78,6 +78,7 @@ class Service(object):
         self.uuid = ''
         self.version = 0
 
+
 class ServiceDiscoveryFilter(object):
     def __init__(self, name='', txt_records={}):
         self.name = name
@@ -94,6 +95,7 @@ class ServiceDiscoveryFilter(object):
                 match = False
                 break
         return match
+
 
 class ServiceDiscovery(object):
     def __init__(self, service_type='machinekit', filter_=ServiceDiscoveryFilter()):
@@ -131,7 +133,7 @@ class ServiceDiscovery(object):
                 service.add_service_info(info)
 
     def _verify_item_and_run(self, item, cmd):
-        if isinstance(item, Discoverable):
+        if isinstance(item, ServiceContainer):
             for service in item.services:
                 cmd(service)
         elif isinstance(item, Service):
@@ -160,12 +162,12 @@ class ServiceDiscovery(object):
             self._stop_discovery()
 
 
-class Discoverable(object):
+class ServiceContainer(object):
     def __init__(self):
         self._services = []
         self._services_ready = False
 
-        self.on_services_ready_changed_cb = []
+        self.on_services_ready_changed = []
 
     @property
     def services(self):
@@ -175,13 +177,13 @@ class Discoverable(object):
         if not isinstance(service, Service):
             raise TypeError('only Service is supported')
         self._services.append(service)
-        service.on_ready_changed_cb.append(self._update_services_ready)
+        service.on_ready_changed.append(self._update_services_ready)
 
     def remove_service(self, service):
         if not isinstance(service, Service):
             raise TypeError('only Service is supported')
         self._services.remove(service)
-        service.on_ready_changed_cb.remove(self._update_services_ready)
+        service.on_ready_changed.remove(self._update_services_ready)
 
     @property
     def services_ready(self):
@@ -191,7 +193,7 @@ class Discoverable(object):
     def services_ready(self, value):
         if value is not self._services_ready:
             self._services_ready = value
-            for cb in self.on_services_ready_changed_cb:
+            for cb in self.on_services_ready_changed:
                 cb(value)
 
     def _update_services_ready(self, _):

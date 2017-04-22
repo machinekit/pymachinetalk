@@ -11,9 +11,9 @@ def sd():
     sd = dns_sd.ServiceDiscovery()
     return sd
 
-def test_registeringServicesFromDiscoverableWorks(dns_sd, sd):
+def test_registeringServicesFromServiceContainerWorks(dns_sd, sd):
     service = dns_sd.Service()
-    discoverable = dns_sd.Discoverable()
+    discoverable = dns_sd.ServiceContainer()
     discoverable.services.append(service)
 
     sd.register(discoverable)
@@ -59,9 +59,9 @@ def test_unregisteringServiceDirectlyWorks(dns_sd, sd):
 
     assert service not in sd.services
 
-def test_unregisteringServicesFromDiscoverableWorks(dns_sd, sd):
+def test_unregisteringServicesFromServiceContainerWorks(dns_sd, sd):
     service = dns_sd.Service()
-    discoverable = dns_sd.Discoverable()
+    discoverable = dns_sd.ServiceContainer()
     discoverable.services.append(service)
     sd.register(discoverable)
 
@@ -207,7 +207,7 @@ def test_settingReadyPropertyOfServiceTriggersCallback(dns_sd):
     def cb(_):
         cb_called[0] = True
     service = dns_sd.Service(type_='halrcomp')
-    service.on_ready_changed_cb.append(cb)
+    service.on_ready_changed.append(cb)
     service_info = ServiceInfoFactory().create()
 
     service.add_service_info(service_info)
@@ -215,7 +215,7 @@ def test_settingReadyPropertyOfServiceTriggersCallback(dns_sd):
     assert cb_called[0] is True
 
 def test_discoverableAddingServiceWorks(dns_sd):
-    discoverable = dns_sd.Discoverable()
+    discoverable = dns_sd.ServiceContainer()
     service = dns_sd.Service(type_='foo')
 
     discoverable.add_service(service)
@@ -223,7 +223,7 @@ def test_discoverableAddingServiceWorks(dns_sd):
     assert service in discoverable.services
 
 def test_discoverableAddingAnythingElseFails(dns_sd):
-    discoverable = dns_sd.Discoverable()
+    discoverable = dns_sd.ServiceContainer()
     item = object()
 
     try:
@@ -235,7 +235,7 @@ def test_discoverableAddingAnythingElseFails(dns_sd):
     assert item not in discoverable.services
 
 def test_discoverableRemovingServiceWorks(dns_sd):
-    discoverable = dns_sd.Discoverable()
+    discoverable = dns_sd.ServiceContainer()
     service = dns_sd.Service(type_='foo')
 
     discoverable.add_service(service)
@@ -244,7 +244,7 @@ def test_discoverableRemovingServiceWorks(dns_sd):
     assert service not in discoverable.services
 
 def test_discoverableRemvoingAnythingElseFails(dns_sd):
-    discoverable = dns_sd.Discoverable()
+    discoverable = dns_sd.ServiceContainer()
     item = object()
 
     try:
@@ -256,7 +256,7 @@ def test_discoverableRemvoingAnythingElseFails(dns_sd):
     assert item not in discoverable.services
 
 def test_discoverableAllServicesReadySetServicesReady(dns_sd):
-    discoverable = dns_sd.Discoverable()
+    discoverable = dns_sd.ServiceContainer()
     service1 = dns_sd.Service(type_='foo')
     discoverable.add_service(service1)
     service2 = dns_sd.Service(type_='bar')
@@ -268,7 +268,7 @@ def test_discoverableAllServicesReadySetServicesReady(dns_sd):
     assert discoverable.services_ready is True
 
 def test_discoverableNotAllServicesReadyUnsetsServicesReady(dns_sd):
-    discoverable = dns_sd.Discoverable()
+    discoverable = dns_sd.ServiceContainer()
     service1 = dns_sd.Service(type_='foo')
     discoverable.add_service(service1)
     service2 = dns_sd.Service(type_='bar')
@@ -284,8 +284,8 @@ def test_discoverableServicesReadyChangedCallsCallback(dns_sd):
     cb_called = [False]
     def cb(_):
         cb_called[0] = True
-    discoverable = dns_sd.Discoverable()
-    discoverable.on_services_ready_changed_cb.append(cb)
+    discoverable = dns_sd.ServiceContainer()
+    discoverable.on_services_ready_changed.append(cb)
 
     discoverable.services_ready = True
 
