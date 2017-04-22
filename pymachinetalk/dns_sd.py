@@ -122,12 +122,16 @@ class ServiceDiscovery(object):
 
     def remove_service(self, zeroconf, type_, name):
         info = zeroconf.get_service_info(type_, name)
+        if info is None:
+            return
         for service in self.services:
             if self.filter.matches_service_info(info) and service.matches_service_info(info):
                 service.remove_service_info(info)
 
     def add_service(self, zeroconf, type_, name):
         info = zeroconf.get_service_info(type_, name)
+        if info is None:
+            return
         for service in self.services:
             if self.filter.matches_service_info(info) and service.matches_service_info(info):
                 service.add_service_info(info)

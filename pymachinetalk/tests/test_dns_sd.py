@@ -122,6 +122,15 @@ def zeroconf(mocker):
     stub_object.get_service_info = zeroconf_stub
     return stub_object
 
+@pytest.fixture
+def zeroconf_without_service_info(mocker):
+    from zeroconf import Zeroconf
+    zeroconf_stub = mocker.stub(name='get_service_info')
+    zeroconf_stub.return_value = None
+    stub_object = Zeroconf()
+    stub_object.get_service_info = zeroconf_stub
+    return stub_object
+
 def test_serviceDiscoveredUpdatesRegisteredServices(dns_sd, sd, zeroconf):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
@@ -130,7 +139,7 @@ def test_serviceDiscoveredUpdatesRegisteredServices(dns_sd, sd, zeroconf):
 
     assert service.ready is True
 
-def test_serviceDisappearedUpdatesRegistedServices(dns_sd, sd, zeroconf):
+def test_serviceDisappearedUpdatesRegisteredServices(dns_sd, sd, zeroconf):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
 
@@ -151,6 +160,23 @@ def test_stoppingServiceDiscoveryResetsAllServices(dns_sd, sd, zeroconf):
 
     assert service1.ready is False
     assert service2.ready is False
+
+def test_serviceDiscoveredWithoutServiceInfoDoesNotUpdateRegisteredServices(dns_sd, sd, zeroconf_without_service_info):
+    service = dns_sd.Service(type_='halrcomp')
+    sd.register(service)
+
+    sd.add_service(zeroconf_without_service_info, '_machinekit._tcp.local.', 'Foo on Bar 127.0.0.1._machinekit._tcp.local.')
+
+    assert service.ready is False
+
+def test_serviceDisappearedWithoutServiceInfoDoesNotUpdateRegisteredServices(dns_sd, sd, zeroconf_without_service_info):
+    service = dns_sd.Service(type_='halrcomp')
+    sd.register(service)
+    service.ready = True
+
+    sd.remove_service(zeroconf_without_service_info, '_machinekit._tcp.local.', 'Foo on Bar 127.0.0.1._machinekit._tcp.local.')
+
+    assert service.ready is True
 
 def test_serviceInfoSetsAllRelevantValuesOfService(dns_sd):
     service = dns_sd.Service(type_='halrcomp')
