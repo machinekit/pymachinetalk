@@ -788,7 +788,6 @@ class ApplicationError(ComponentBase, ErrorBase, ServiceContainer):
         self.connected = False
         self.channels = set(['error', 'text', 'display'])
         self.error_list = []
-        self._ready = False
 
         self._error_service = Service(type_='error')
         self.add_service(self._error_service)
@@ -859,9 +858,10 @@ class ApplicationError(ComponentBase, ErrorBase, ServiceContainer):
             return messages
 
 
-class ApplicationFile(ServiceContainer):
+class ApplicationFile(ComponentBase, ServiceContainer):
 
     def __init__(self, debug=True):
+        ComponentBase.__init__(self)
         ServiceContainer.__init__(self)
         self.debug = debug
         self.state_condition = threading.Condition(threading.Lock())
@@ -877,7 +877,6 @@ class ApplicationFile(ServiceContainer):
         self.bytes_total = 0.0
         self.progress = 0.0
         self.file = None
-        self.ready = False
 
         self._file_list = []
 
@@ -1082,3 +1081,9 @@ class ApplicationFile(ServiceContainer):
 
     def clear_error(self):
         raise NotImplementedError('not implemented')
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass

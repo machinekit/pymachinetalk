@@ -100,6 +100,7 @@ def recurse_message(message, obj, field_filter=''):
 class ComponentBase(object):
     def __init__(self):
         self._ready = False
+        self.on_ready_changed = []
 
     @property
     def ready(self):
@@ -115,4 +116,7 @@ class ComponentBase(object):
             self.start()
         else:
             self.stop()
+
+        for cb in self.on_ready_changed:
+            cb(ready)
 
