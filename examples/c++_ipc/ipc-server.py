@@ -2,7 +2,6 @@
 import sys
 import os
 import time
-import gobject
 import threading
 import zmq
 
@@ -127,8 +126,6 @@ def main():
     uuid = mki.get("MACHINEKIT", "MKUUID")
     # remote = mki.getint("MACHINEKIT", "REMOTE")
 
-    gobject.threads_init()  # important: initialize threads if gobject main loop is used
-    #register_exit_handler()
     ipcServer = IPCServer(uuid=uuid)
     ipcServer.start()
 

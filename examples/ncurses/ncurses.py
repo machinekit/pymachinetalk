@@ -2,13 +2,11 @@
 import sys
 import os
 import time
-import signal
-import gobject
 import threading
 import curses
 
 from machinekit import config
-from pymachinetalk.dns_sd import ServiceDiscovery
+from pymachinetalk.dns_sd import ServiceDiscovery, ServiceDiscoveryFilter
 from pymachinetalk.application import ApplicationStatus
 from pymachinetalk.application import ApplicationCommand
 from pymachinetalk.application import ApplicationError
@@ -24,61 +22,38 @@ else:
 
 class TerminalUI(object):
     def __init__(self, uuid, use_curses):
-        self.halrcmdReady = False
-        self.halrcompReady = False
+        sd_filter = ServiceDiscoveryFilter(txt_records={ 'uuid': uuid })
+        self.sd = ServiceDiscovery(filter_=sd_filter)
 
         halrcomp = halremote.component('test')
         halrcomp.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp = halrcomp
+        self.sd.register(halrcomp)
 
         halrcomp2 = halremote.RemoteComponent(name='test2', debug=False)
         halrcomp2.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp2.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp2 = halrcomp2
+        self.sd.register(halrcomp2)
 
         self.status = ApplicationStatus(debug=False)
+        self.status.on_synced_changed.append(self._on_status_synced)
+        self.sd.register(self.status)
         self.command = ApplicationCommand(debug=False)
+        self.sd.register(self.command)
         self.error = ApplicationError(debug=False)
+        self.sd.register(self.error)
         self.fileservice = ApplicationFile(debug=True)
         self.fileservice.local_file_path = 'test.ngc'
         self.fileservice.local_path = './ngc/'
         self.fileservice.remote_path = '/home/xy/'
         self.fileservice.remote_file_path = '/home/xy/test.ngc'
-
-        halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)
-        halrcmd_sd.on_discovered.append(self.halrcmd_discovered)
-        halrcmd_sd.start()
-        #halrcmd_sd.disappered_callback = disappeared
-        self.halrcmd_sd = halrcmd_sd
-
-        halrcomp_sd = ServiceDiscovery(service_type="_halrcomp._sub._machinekit._tcp", uuid=uuid)
-        halrcomp_sd.on_discovered.append(self.halrcomp_discovered)
-        halrcomp_sd.start()
-        self.harcomp_sd = halrcomp_sd
-
-        status_sd = ServiceDiscovery(service_type="_status._sub._machinekit._tcp", uuid=uuid)
-        status_sd.on_discovered.append(self.status_discovered)
-        status_sd.on_disappeared.append(self.status_disappeared)
-        status_sd.start()
-        self.status_sd = status_sd
-
-        command_sd = ServiceDiscovery(service_type="_command._sub._machinekit._tcp", uuid=uuid)
-        command_sd.on_discovered.append(self.command_discovered)
-        command_sd.on_disappeared.append(self.command_disappeared)
-        command_sd.start()
-
-        error_sd = ServiceDiscovery(service_type="_error._sub._machinekit._tcp", uuid=uuid)
-        error_sd.on_discovered.append(self.error_discovered)
-        error_sd.on_disappeared.append(self.error_disappeared)
-        error_sd.start()
-
-        file_sd = ServiceDiscovery(service_type="_file._sub._machinekit._tcp", uuid=uuid)
-        file_sd.on_discovered.append(self.file_discovered)
-        file_sd.on_disappeared.append(self.file_disappeared)
-        file_sd.start()
+        self.fileservice.on_ready_changed.append(self._on_fileservice_ready)
+        self.sd.register(self.fileservice)
 
         self.timer = None
+        self.timer_interval = 0.1
 
         self.use_curses = use_curses
         if not self.use_curses:
@@ -97,77 +72,30 @@ class TerminalUI(object):
         curses.noecho()
         curses.cbreak()
 
-    def start_halrcomp(self):
-        print('connecting rcomp %s' % self.halrcomp.name)
-        self.halrcomp.ready()
-        self.halrcomp2.ready()
+    def _on_status_synced(self, synced):
+        if synced:
+            self.timer = threading.Timer(self.timer_interval, self.status_timer_tick)
+            self.timer.start()
+        else:
+            if self.timer:
+                self.timer.cancel()
+                self.timer = None
 
-    def halrcmd_discovered(self, data):
-        print("discovered %s %s" % (data.name, data.dsn))
-        self.halrcomp.halrcmd_uri = data.dsn
-        self.halrcomp2.halrcmd_uri = data.dsn
-        self.halrcmdReady = True
-        if self.halrcompReady:
-            self.start_halrcomp()
+    def _on_fileservice_ready(self, ready):
+        if ready:
+            print('fileservice ready')
+            self.fileservice.refresh_files()
+            self.fileservice.wait_completed()
+            print(self.fileservice.file_list)
+            self.fileservice.remove_file('test.ngc')
+            self.fileservice.wait_completed()
 
-    def halrcomp_discovered(self, data):
-        print("discovered %s %s" % (data.name, data.dsn))
-        self.halrcomp.halrcomp_uri = data.dsn
-        self.halrcomp2.halrcomp_uri = data.dsn
-        self.halrcompReady = True
-        if self.halrcmdReady:
-            self.start_halrcomp()
-
-    def status_discovered(self, data):
-        print('discovered %s %s' % (data.name, data.dsn))
-        self.status.status_uri = data.dsn
-        self.status.ready()
-        if self.timer:
-            self.timer.cancel()
-        self.timer = threading.Timer(0.1, self.status_timer)
-        self.timer.start()
-
-    def status_disappeared(self, data):
-        print('%s disappeared' % data.name)
-        self.status.stop()
-
-    def command_discovered(self, data):
-        print('discovered %s %s' % (data.name, data.dsn))
-        self.command.command_uri = data.dsn
-        self.command.ready()
-
-    def command_disappeared(self, data):
-        print('%s disappeared' % data.name)
-        self.command.stop()
-
-    def error_discovered(self, data):
-        print('discovered %s %s' % (data.name, data.dsn))
-        self.error.error_uri = data.dsn
-        self.error.ready()
-
-    def error_disappeared(self, data):
-        print('%s disappeared' % data.name)
-        self.error.stop()
-
-    def file_discovered(self, data):
-        print('discovered %s %s' % (data.name, data.dsn))
-        self.fileservice.uri = data.dsn
-        #self.fileservice.start_download()
-        self.fileservice.refresh_files()
-        self.fileservice.wait_completed()
-        print(self.fileservice.file_list)
-        self.fileservice.remove_file('test.ngc')
-        self.fileservice.wait_completed()
-
-    def file_disappeared(self, data):
-        print('%s disappeared' % data.name)
-
-    def status_timer(self):
+    def status_timer_tick(self):
         #if self.status.synced:
         # print('flood %s' % self.status.io.flood)
         if self.use_curses:
             self.update_screen()
-        self.timer = threading.Timer(0.05, self.status_timer)
+        self.timer = threading.Timer(self.timer_interval, self.status_timer_tick)
         self.timer.start()
 
     def toggle_pin(self):
@@ -250,17 +178,11 @@ class TerminalUI(object):
         elif c == curses.KEY_F3:
             self.fileservice.start_upload()
 
+    def start(self):
+        self.sd.start()
+
     def stop(self):
-        if self.halrcomp is not None:
-            self.halrcomp.stop()
-        if self.halrcomp2 is not None:
-            self.halrcomp2.stop()
-        if self.status is not None:
-            self.status.stop()
-        if self.command is not None:
-            self.command.stop()
-        if self.error is not None:
-            self.error.stop()
+        self.sd.stop()
 
         if self.timer:
             self.timer.cancel()
@@ -281,21 +203,18 @@ def main():
     mki = configparser.ConfigParser()
     mki.read(mkini)
     uuid = mki.get("MACHINEKIT", "MKUUID")
-    # remote = mki.getint("MACHINEKIT", "REMOTE")
 
-    gobject.threads_init()  # important: initialize threads if gobject main loop is used
-    test = TerminalUI(uuid=uuid, use_curses=True)
-    loop = gobject.MainLoop()
+    ui = TerminalUI(uuid=uuid, use_curses=True)
+    ui.start()
+
     try:
-        loop.run()
+        while True:
+            time.sleep(0.5)
     except KeyboardInterrupt:
-        loop.quit()
-
-    # while dns_sd.running and not check_exit():
-    #     time.sleep(1)
+        pass
 
     print("stopping threads")
-    test.stop()
+    ui.stop()
 
     # wait for all threads to terminate
     while threading.active_count() > 1:
