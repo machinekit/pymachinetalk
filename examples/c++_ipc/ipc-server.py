@@ -2,14 +2,13 @@
 import sys
 import os
 import time
-import gobject
 import threading
 import zmq
 
 # Machinekit specific, can only use on local machine
 from machinekit import config
 # Machinetalk bindings
-from pymachinetalk.dns_sd import ServiceDiscovery
+from pymachinetalk.dns_sd import ServiceDiscovery, ServiceDiscoveryFilter
 from pymachinetalk.application import ApplicationStatus
 from pymachinetalk.application import ApplicationCommand
 import pymachinetalk.application as application
@@ -28,19 +27,12 @@ class IPCServer():
         self.debug = debug
         self.threads = []
         self.shutdown = threading.Event()
+        sd_filter = ServiceDiscoveryFilter(txt_records={ 'uuid': uuid })
+        self.sd = ServiceDiscovery(filter_=sd_filter)
         self.status = ApplicationStatus()
         self.command = ApplicationCommand()
-
-        status_sd = ServiceDiscovery(service_type="_status._sub._machinekit._tcp", uuid=uuid)
-        status_sd.on_discovered.append(self.status_discovered)
-        status_sd.on_disappeared.append(self.status_disappeared)
-        status_sd.start()
-        self.status_sd = status_sd
-
-        command_sd = ServiceDiscovery(service_type="_command._sub._machinekit._tcp", uuid=uuid)
-        command_sd.on_discovered.append(self.command_discovered)
-        command_sd.on_disappeared.append(self.command_disappeared)
-        command_sd.start()
+        self.sd.register(self.status)
+        self.sd.register(self.command)
 
         # create ipc sockets
         context = zmq.Context()
@@ -58,8 +50,8 @@ class IPCServer():
             print('bound ROUTER socket to %s' % self.zmqDsname)
         self.zmqLock = threading.Lock()
 
-        self.tx = Message()
-        self.rx = Message()
+        self._tx = Message()
+        self._rx = Message()
 
         self.threads.append(threading.Thread(target=self.socket_worker))
         for thread in self.threads:
@@ -67,10 +59,10 @@ class IPCServer():
 
     def send_msg(self, identity, msg_type):
         with self.zmqLock:
-            self.tx.type = msg_type
-            txBuffer = self.tx.SerializeToString()
+            self._tx.type = msg_type
+            txBuffer = self._tx.SerializeToString()
             self.zmqSocket.send_multipart([identity, txBuffer], zmq.NOBLOCK)
-            self.tx.Clear()
+            self._tx.Clear()
 
     def socket_worker(self):
         poll = zmq.Poller()
@@ -83,61 +75,37 @@ class IPCServer():
 
     def process_msg(self, socket):
         (identity, message) = socket.recv_multipart()
-        self.rx.ParseFromString(message)
+        self._rx.ParseFromString(message)
 
         if self.debug:
             print("process message called, id: %s" % identity)
-            print(str(self.rx))
+            print(str(self._rx))
 
-        if self.rx.type == IPC_POSITION:
-            self.tx.x = self.status.motion.position.x - \
+        if self._rx.type == IPC_POSITION:
+            self._tx.x = self.status.motion.position.x - \
                         self.status.motion.g5x_offset.x - \
                         self.status.motion.g92_offset.x - \
                         self.status.io.tool_offset.x
-            self.tx.y = self.status.motion.position.y - \
+            self._tx.y = self.status.motion.position.y - \
                         self.status.motion.g5x_offset.y - \
                         self.status.motion.g92_offset.y - \
                         self.status.io.tool_offset.y
             self.send_msg(identity, IPC_POSITION)
 
-        elif self.rx.type == IPC_JOG:
+        elif self._rx.type == IPC_JOG:
             self.command.set_task_mode(application.EMC_TASK_MODE_MANUAL)
-            self.command.jog(self.rx.jog_type, self.rx.axis,
-                             self.rx.velocity, self.rx.distance)
+            self.command.jog(self._rx.jog_type, self._rx.axis,
+                             self._rx.velocity, self._rx.distance)
 
-        elif self.rx.type == IPC_CONNECTED:
-            self.tx.connected = self.status.synced and self.command.connected
+        elif self._rx.type == IPC_CONNECTED:
+            self._tx.connected = self.status.synced and self.command.connected
             self.send_msg(identity, IPC_CONNECTED)
 
-    def status_discovered(self, data):
-        if self.debug:
-            print('discovered %s %s' % (data.name, data.dsn))
-        self.status.status_uri = data.dsn
-        self.status.ready()
-        #self.timer = threading.Timer(0.1, self.status_timer)
-        #self.timer.start()
-
-    def status_disappeared(self, data):
-        if self.debug:
-            print('%s disappeared' % data.name)
-        self.status.stop()
-
-    def command_discovered(self, data):
-        if self.debug:
-            print('discovered %s %s' % (data.name, data.dsn))
-        self.command.command_uri = data.dsn
-        self.command.ready()
-
-    def command_disappeared(self, data):
-        if self.debug:
-            print('%s disappeared' % data.name)
-        self.command.stop()
+    def start(self):
+        self.sd.start()
 
     def stop(self):
-        if self.status is not None:
-            self.status.stop()
-        if self.command is not None:
-            self.command.stop()
+        self.sd.stop()
         self.shutdown.set()
         for thread in self.threads:
             thread.join()
@@ -158,17 +126,14 @@ def main():
     uuid = mki.get("MACHINEKIT", "MKUUID")
     # remote = mki.getint("MACHINEKIT", "REMOTE")
 
-    gobject.threads_init()  # important: initialize threads if gobject main loop is used
-    #register_exit_handler()
     ipcServer = IPCServer(uuid=uuid)
-    loop = gobject.MainLoop()
-    try:
-        loop.run()
-    except KeyboardInterrupt:
-        loop.quit()
+    ipcServer.start()
 
-    # while dns_sd.running and not check_exit():
-    #     time.sleep(1)
+    try:
+        while True:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
 
     print("stopping threads")
     ipcServer.stop()

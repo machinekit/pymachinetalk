@@ -2,31 +2,27 @@
 
 import time
 import sys
-import gobject
 import threading
 
 from pymachinetalk.dns_sd import ServiceDiscovery
 import pymachinetalk.halremote as halremote
 
 
-class BasicClass():
+class BasicClass(object):
     def __init__(self):
-        launcher_sd = ServiceDiscovery(service_type="_launcher._sub._machinekit._tcp")
-        launcher_sd.on_discovered.append(self.service_discovered)
-        launcher_sd.on_disappeared.append(self.service_disappeared)
-        launcher_sd.start()
-        self.launcher_sd = launcher_sd
+        self.sd = ServiceDiscovery()
 
-        self.halrcompReady = False
-        self.halrcmdReady = False
-        halrcomp = halremote.RemoteComponent('anddemo', debug=False)
-        halrcomp.newpin('button0', halremote.HAL_BIT, halremote.HAL_OUT)
-        halrcomp.newpin('button1', halremote.HAL_BIT, halremote.HAL_OUT)
-        led_pin = halrcomp.newpin('led', halremote.HAL_BIT, halremote.HAL_IN)
-        halrcomp.no_create = True
+        rcomp = halremote.RemoteComponent('anddemo', debug=False)
+        rcomp.no_create = True
+        rcomp.newpin('button0', halremote.HAL_BIT, halremote.HAL_OUT)
+        rcomp.newpin('button1', halremote.HAL_BIT, halremote.HAL_OUT)
+        led_pin = rcomp.newpin('led', halremote.HAL_BIT, halremote.HAL_IN)
         led_pin.on_value_changed.append(self.led_pin_changed)
         led_pin.on_synced_changed.append(self.led_pin_synced)
-        self.halrcomp = halrcomp
+        rcomp.on_connected_changed.append(self._connected)
+
+        self.halrcomp = rcomp
+        self.sd.register(rcomp)
 
     def led_pin_synced(self, synced):
         if synced:
@@ -35,64 +31,35 @@ class BasicClass():
     def led_pin_changed(self, value):
         print('LED pin value changed: %s' % str(value))
 
-    def start_sd(self, uuid):
-        halrcmd_sd = ServiceDiscovery(service_type="_halrcmd._sub._machinekit._tcp", uuid=uuid)
-        halrcmd_sd.on_discovered.append(self.halrcmd_discovered)
-        halrcmd_sd.start()
-        #halrcmd_sd.disappered_callback = disappeared
-        #self.halrcmd_sd = halrcmd_sd
+    def _connected(self, connected):
+        print('Remote component connected: %s' % str(connected))
 
-        halrcomp_sd = ServiceDiscovery(service_type="_halrcomp._sub._machinekit._tcp", uuid=uuid)
-        halrcomp_sd.on_discovered.append(self.halrcomp_discovered)
-        halrcomp_sd.start()
-        #self.harcomp_sd = halrcomp_sd
-
-    def service_disappeared(self, data):
-        print("disappeared %s %s" % (data.name))
-
-    def service_discovered(self, data):
-        print("discovered %s %s %s" % (data.name, data.dsn, data.uuid))
-        self.start_sd(data.uuid)
-
-    def halrcmd_discovered(self, data):
-        print("discovered %s %s" % (data.name, data.dsn))
-        self.halrcomp.halrcmd_uri = data.dsn
-        self.halrcmdReady = True
-        if self.halrcompReady:
-            self.start_halrcomp()
-
-    def halrcomp_discovered(self, data):
-        print("discovered %s %s" % (data.name, data.dsn))
-        self.halrcomp.halrcomp_uri = data.dsn
-        self.halrcompReady = True
-        if self.halrcmdReady:
-            self.start_halrcomp()
-
-    def start_halrcomp(self):
-        print('connecting rcomp %s' % self.halrcomp.name)
-        self.halrcomp.ready()
+    def start(self):
+        self.sd.start()
 
     def stop(self):
-        self.halrcomp.stop()
-
+        self.sd.stop()
 
 def main():
-    gobject.threads_init()  # important: initialize threads if gobject main loop is used
     basic = BasicClass()
-    loop = gobject.MainLoop()
-    try:
-        loop.run()
-    except KeyboardInterrupt:
-        loop.quit()
 
-    print("stopping threads")
+    print('starting')
+    basic.start()
+
+    try:
+        while True:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+
+    print('stopping threads')
     basic.stop()
 
     # wait for all threads to terminate
     while threading.active_count() > 1:
         time.sleep(0.1)
 
-    print("threads stopped")
+    print('threads stopped')
     sys.exit(0)
 
 if __name__ == "__main__":

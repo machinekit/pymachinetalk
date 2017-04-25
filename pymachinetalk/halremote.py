@@ -1,4 +1,6 @@
 import threading
+from dns_sd import ServiceContainer, Service
+from common import ComponentBase
 
 # protobuf
 from machinetalk.protobuf.message_pb2 import Container
@@ -75,9 +77,11 @@ class Pin(object):
         return self.value
 
 
-class RemoteComponent(RemoteComponentBase):
+class RemoteComponent(ComponentBase, RemoteComponentBase, ServiceContainer):
     def __init__(self, name, debug=False):
-        super(RemoteComponent, self).__init__(debuglevel=int(debug))
+        ComponentBase.__init__(self)
+        RemoteComponentBase.__init__(self, debuglevel=int(debug))
+        ServiceContainer.__init__(self)
         self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug
 
@@ -87,14 +91,24 @@ class RemoteComponent(RemoteComponentBase):
         self.name = name
         self.pinsbyname = {}
         self.pinsbyhandle = {}
-        self.is_ready = False
         self.no_create = False
         self.no_bind = False
 
         self.connected = False
 
         # more efficient to reuse a protobuf message
-        self.tx = Container()
+        self._tx = Container()
+
+        self._halrcomp_service = Service(type_='halrcomp')
+        self._halrcmd_service = Service(type_='halrcmd')
+        self.add_service(self._halrcomp_service)
+        self.add_service(self._halrcmd_service)
+        self.on_services_ready_changed.append(self._on_services_ready_changed)
+
+    def _on_services_ready_changed(self, ready):
+        self.halrcomp_uri = self._halrcomp_service.uri
+        self.halrcmd_uri = self._halrcmd_service.uri
+        self.ready = ready
 
     def wait_connected(self, timeout=None):
         with self.connected_condition:
@@ -179,11 +193,6 @@ class RemoteComponent(RemoteComponentBase):
     def getpin(self, name):
         return self.pinsbyname[name]
 
-    def ready(self):
-        if not self.is_ready:
-            self.is_ready = True
-            self.start()
-
     def pin_update(self, rpin, lpin):
         if rpin.HasField('halfloat'):
             lpin.value = float(rpin.halfloat)
@@ -214,7 +223,7 @@ class RemoteComponent(RemoteComponentBase):
         # Each Pin message MUST carry the type field
         # Each Pin message MUST - depending on pin type - carry a halbit,
         # halfloat, hals32, or halu32 field.
-        p = self.tx.pin.add()
+        p = self._tx.pin.add()
         p.handle = pin.handle
         p.type = pin.pintype
         if p.type == HAL_FLOAT:
@@ -225,10 +234,10 @@ class RemoteComponent(RemoteComponentBase):
             p.hals32 = int(pin.value)
         elif p.type == HAL_U32:
             p.halu32 = int(pin.value)
-        self.send_halrcomp_set(self.tx)
+        self.send_halrcomp_set(self._tx)
 
     def bind_component(self):
-        c = self.tx.comp.add()
+        c = self._tx.comp.add()
         c.name = self.name
         c.no_create = self.no_create  # for now we create the component
         for name, pin in self.pinsbyname.iteritems():
@@ -246,7 +255,7 @@ class RemoteComponent(RemoteComponentBase):
                 p.halu32 = int(pin.value)
         if self.debug:
             print('[%s] bind' % self.name)
-        self.send_halrcomp_bind(self.tx)
+        self.send_halrcomp_bind(self._tx)
 
     def add_pins(self):
         self.clear_halrcomp_topics()

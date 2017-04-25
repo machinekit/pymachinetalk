@@ -1,2 +1,11 @@
+# Python
 *.pyc
-core
+
+# PyPi
+*.egg-info
+build/
+dist/
+
+# IDEs
+.cache
+.idea
