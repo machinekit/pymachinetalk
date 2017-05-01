@@ -79,8 +79,8 @@ class Pin(object):
 
 class RemoteComponent(ComponentBase, RemoteComponentBase, ServiceContainer):
     def __init__(self, name, debug=False):
-        ComponentBase.__init__(self)
         RemoteComponentBase.__init__(self, debuglevel=int(debug))
+        ComponentBase.__init__(self)
         ServiceContainer.__init__(self)
         self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug

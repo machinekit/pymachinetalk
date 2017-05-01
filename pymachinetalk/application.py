@@ -63,8 +63,8 @@ OPERATOR_DISPLAY = types.MT_EMC_OPERATOR_DISPLAY
 class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
 
     def __init__(self, debug=False):
-        ComponentBase.__init__(self)
         StatusBase.__init__(self, debuglevel=int(debug))
+        ComponentBase.__init__(self)
         ServiceContainer.__init__(self)
         self.config_condition = threading.Condition(threading.Lock())
         self.io_condition = threading.Condition(threading.Lock())
@@ -260,8 +260,8 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
 class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
 
     def __init__(self, debug=False):
-        ComponentBase.__init__(self)
         CommandBase.__init__(self, debuglevel=int(debug))
+        ComponentBase.__init__(self)
         ServiceContainer.__init__(self)
         self.completed_condition = threading.Condition(threading.Lock())
         self.executed_condition = threading.Condition(threading.Lock())
@@ -775,8 +775,8 @@ class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
 
 class ApplicationError(ComponentBase, ErrorBase, ServiceContainer):
     def __init__(self, debug=False):
-        ComponentBase.__init__(self)
         ErrorBase.__init__(self, debuglevel=int(debug))
+        ComponentBase.__init__(self)
         ServiceContainer.__init__(self)
         self.message_lock = threading.Lock()
         self.connected_condition = threading.Condition(threading.Lock())

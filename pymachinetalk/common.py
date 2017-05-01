@@ -1,3 +1,5 @@
+import sys
+
 class MessageObject():
     def __init__(self):
         self.is_position = False
@@ -101,6 +103,7 @@ class ComponentBase(object):
     def __init__(self):
         self._ready = False
         self.on_ready_changed = []
+        self.on_error_string_changed.append(self._on_error_string_changed)
 
     @property
     def ready(self):
@@ -120,3 +123,5 @@ class ComponentBase(object):
         for cb in self.on_ready_changed:
             cb(ready)
 
+    def _on_error_string_changed(self, string):
+        sys.stderr.write('Error: %s\n' % string)
