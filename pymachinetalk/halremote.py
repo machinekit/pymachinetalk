@@ -166,6 +166,9 @@ class RemoteComponent(ComponentBase, RemoteComponentBase, ServiceContainer):
 
         self.pins_synced()  # accept that pins have been synced
 
+    def halrcomp_error_received(self, _, rx):
+        pass
+
     # create a new HAL pin
     def newpin(self, name, pintype, direction):
         pin = Pin()
