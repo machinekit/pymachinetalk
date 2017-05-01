@@ -907,14 +907,14 @@ class ApplicationFile(ComponentBase, ServiceContainer):
         with self.file_list_lock:
             return self._file_list
 
-    def upload_worker(self):
+    def _upload_worker(self):
         o = urlparse(self.file_uri)
         # test o.scheme
 
         filename = os.path.basename(self.local_file_path)
         self.remote_file_path = os.path.join(self.remote_path, filename)
 
-        self.update_state('UploadRunning')  # lets start the upload
+        self._update_state('UploadRunning')  # lets start the upload
         if self.debug:
             print('[file] starting upload of %s' % filename)
 
@@ -923,8 +923,8 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             self.bytes_total = os.path.getsize(self.local_file_path)
             f = open(self.local_file_path, 'r')
         except OSError as e:
-            self.update_state('Error')
-            self.update_error('file', str(e))
+            self._update_state('Error')
+            self._update_error('file', str(e))
             return
 
         try:
@@ -933,26 +933,26 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             ftp.connect(host=o.hostname, port=o.port)
             ftp.login()
             ftp.storbinary('STOR %s' % filename, f, blocksize=8192,
-                           callback=self.progress_callback)
+                           callback=self._progress_callback)
             ftp.close()
             f.close()
         except Exception as e:
-            self.update_state('Error')
-            self.update_error('ftp', str(e))
+            self._update_state('Error')
+            self._update_error('ftp', str(e))
             return
 
-        self.update_state('NoTransfer')  # upload successfully finished
+        self._update_state('NoTransfer')  # upload successfully finished
         if self.debug:
             print('[file] upload of %s finished' % filename)
 
-    def download_worker(self):
+    def _download_worker(self):
         o = urlparse(self.file_uri)
         # test o.scheme
 
         filename = self.remote_file_path[len(self.remote_path):]  # mid
         self.local_file_path = os.path.join(self.local_path, filename)
 
-        self.update_state('DownloadRunning')  # lets start the upload
+        self._update_state('DownloadRunning')  # lets start the upload
         if self.debug:
             print('[file] starting download of %s' % filename)
 
@@ -962,8 +962,8 @@ class ApplicationFile(ComponentBase, ServiceContainer):
                 os.makedirs(local_path)
             self.file = open(self.local_file_path, 'w')
         except Exception as e:
-            self.update_state('Error')
-            self.update_error('file', str(e))
+            self._update_state('Error')
+            self._update_error('file', str(e))
             return
 
         try:
@@ -974,24 +974,24 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             self.progress = 0.0
             self.bytes_sent = 0.0
             self.bytes_total = ftp.size(filename)
-            ftp.retrbinary('RETR %s' % filename, self.progress_callback)
+            ftp.retrbinary('RETR %s' % filename, self._progress_callback)
             ftp.close()
             self.file.close()
             self.file = None
         except Exception as e:
-            self.update_state('Error')
-            self.update_error('ftp', str(e))
+            self._update_state('Error')
+            self._update_error('ftp', str(e))
             return
 
-        self.update_state('NoTransfer')  # upload successfully finished
+        self._update_state('NoTransfer')  # upload successfully finished
         if self.debug:
             print('[file] download of %s finished' % filename)
 
-    def refresh_files_worker(self):
+    def _refresh_files_worker(self):
         o = urlparse(self.file_uri)
         # test o.scheme
 
-        self.update_state('RefreshRunning')  # lets start the upload
+        self._update_state('RefreshRunning')  # lets start the upload
         if self.debug:
             print('[file] starting file list refresh')
 
@@ -1003,19 +1003,19 @@ class ApplicationFile(ComponentBase, ServiceContainer):
                 self._file_list = ftp.nlst()
             ftp.close()
         except Exception as e:
-            self.update_state('Error')
-            self.update_error('ftp', str(e))
+            self._update_state('Error')
+            self._update_error('ftp', str(e))
             return
 
-        self.update_state('NoTransfer')  # upload successfully finished
+        self._update_state('NoTransfer')  # upload successfully finished
         if self.debug:
             print('[file] file refresh finished')
 
-    def remove_file_worker(self, filename):
+    def _remove_file_worker(self, filename):
         o = urlparse(self.file_uri)
         # test o.scheme
 
-        self.update_state('RemoveRunning')  # lets start the upload
+        self._update_state('RemoveRunning')  # lets start the upload
         if self.debug:
             print('[file] removing %s' % filename)
 
@@ -1026,15 +1026,15 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             ftp.delete(filename)
             ftp.close()
         except Exception as e:
-            self.update_state('Error')
-            self.update_error('ftp', str(e))
+            self._update_state('Error')
+            self._update_error('ftp', str(e))
             return
 
-        self.update_state('NoTransfer')  # upload successfully finished
+        self._update_state('NoTransfer')  # upload successfully finished
         if self.debug:
             print('[file] removing %s completed' % filename)
 
-    def progress_callback(self, data):
+    def _progress_callback(self, data):
         if self.file is not None:
             self.file.write(data)
         self.bytes_sent += 8192
@@ -1045,7 +1045,7 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             if not self.ready or self.transfer_state != 'NoTransfer':
                 return
 
-        thread = threading.Thread(target=self.upload_worker)
+        thread = threading.Thread(target=self._upload_worker)
         thread.start()
 
     def start_download(self):
@@ -1053,7 +1053,7 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             if not self.ready or self.transfer_state != 'NoTransfer':
                 return
 
-        thread = threading.Thread(target=self.download_worker)
+        thread = threading.Thread(target=self._download_worker)
         thread.start()
 
     def refresh_files(self):
@@ -1061,7 +1061,7 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             if not self.ready or self.transfer_state != 'NoTransfer':
                 return
 
-        thread = threading.Thread(target=self.refresh_files_worker)
+        thread = threading.Thread(target=self._refresh_files_worker)
         thread.start()
 
     def remove_file(self, name):
@@ -1069,7 +1069,7 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             if not self.ready or self.transfer_state != 'NoTransfer':
                 return
 
-        thread = threading.Thread(target=self.remove_file_worker, args=(name, ))
+        thread = threading.Thread(target=self._remove_file_worker, args=(name, ))
         thread.start()
 
     def abort(self):
@@ -1084,13 +1084,13 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             self.state_condition.wait(timeout=timeout)
             return self.transfer_state == 'NoTransfer'
 
-    def update_state(self, state):
+    def _update_state(self, state):
         with self.state_condition:
             if self.transfer_state != state:
                 self.transfer_state = state
                 self.state_condition.notify()
 
-    def update_error(self, error, description):
+    def _update_error(self, error, description):
         self.error_string = '[file] error: %s %s' % (error, description)
 
     def clear_error(self):
