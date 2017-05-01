@@ -861,6 +861,8 @@ class ApplicationError(ComponentBase, ErrorBase, ServiceContainer):
 class ApplicationFile(ComponentBase, ServiceContainer):
 
     def __init__(self, debug=True):
+        self._error_string = ''
+        self.on_error_string_changed = []
         ComponentBase.__init__(self)
         ServiceContainer.__init__(self)
         self.debug = debug
@@ -887,6 +889,18 @@ class ApplicationFile(ComponentBase, ServiceContainer):
     def _on_services_ready_changed(self, ready):
         self.file_uri = self._file_service.uri
         self.ready = ready
+
+    @property
+    def error_string(self):
+        return self._error_string
+
+    @error_string.setter
+    def error_string(self, string):
+        if self._error_string is string:
+            return
+        self._error_string = string
+        for cb in self.on_error_string_changed:
+            cb(string)
 
     @property
     def file_list(self):
@@ -1077,10 +1091,10 @@ class ApplicationFile(ComponentBase, ServiceContainer):
                 self.state_condition.notify()
 
     def update_error(self, error, description):
-        print('[file] error: %s %s' % (error, description))
+        self.error_string = '[file] error: %s %s' % (error, description)
 
     def clear_error(self):
-        raise NotImplementedError('not implemented')
+        self.error_string = ''
 
     def start(self):
         pass
