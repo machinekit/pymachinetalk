@@ -11,7 +11,8 @@ class StatusSubscribe(object):
     def __init__(self, debuglevel=0, debugname='Status Subscribe'):
         self.debuglevel = debuglevel
         self.debugname = debugname
-        self.error_string = ''
+        self._error_string = ''
+        self.on_error_string_changed = []
         # ZeroMQ
         context = zmq.Context()
         context.linger = 0
@@ -38,8 +39,8 @@ class StatusSubscribe(object):
         self._heartbeat_reset_liveness = 2
 
         # callbacks
-        self.socket_message_received_cb = None
-        self.state_changed_cb = None
+        self.on_socket_message_received = []
+        self.on_state_changed = []
 
         # fsm
         self._fsm = Fysom({'initial': 'down',
@@ -66,8 +67,8 @@ class StatusSubscribe(object):
     def _on_fsm_down(self, _):
         if self.debuglevel > 0:
             print('[%s]: state DOWN' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('down')
+        for cb in self.on_state_changed:
+            cb('down')
         return True
 
     def _on_fsm_start(self, _):
@@ -79,8 +80,8 @@ class StatusSubscribe(object):
     def _on_fsm_trying(self, _):
         if self.debuglevel > 0:
             print('[%s]: state TRYING' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('trying')
+        for cb in self.on_state_changed:
+            cb('trying')
         return True
 
     def _on_fsm_full_update_received(self, _):
@@ -100,8 +101,8 @@ class StatusSubscribe(object):
     def _on_fsm_up(self, _):
         if self.debuglevel > 0:
             print('[%s]: state UP' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('up')
+        for cb in self.on_state_changed:
+            cb('up')
         return True
 
     def _on_fsm_heartbeat_timeout(self, _):
@@ -124,6 +125,18 @@ class StatusSubscribe(object):
         self.reset_heartbeat_liveness()
         self.reset_heartbeat_timer()
         return True
+
+    @property
+    def error_string(self):
+        return self._error_string
+
+    @error_string.setter
+    def error_string(self, string):
+        if self._error_string is string:
+            return
+        self._error_string = string
+        for cb in self.on_error_string_changed:
+            cb(string)
 
     def start(self):
         if self._fsm.isstate('down'):
@@ -164,16 +177,15 @@ class StatusSubscribe(object):
                 shutdown.recv()
                 return  # shutdown signal
             if socket in s:
-                self.socket_message_received(socket)
+                self._socket_message_received(socket)
 
     def start_socket(self):
         self._thread = threading.Thread(target=self._socket_worker,
-                                       args=(self._context, self.socket_uri,))
+                                        args=(self._context, self.socket_uri,))
         self._thread.start()
 
     def stop_socket(self):
         self._shutdown.send(' ')  # trigger socket thread shutdown
-        self._thread.join()
         self._thread = None
 
     def _heartbeat_timer_tick(self):
@@ -225,7 +237,7 @@ class StatusSubscribe(object):
         self._heartbeat_lock.release()
 
     # process all messages received on socket
-    def socket_message_received(self, socket):
+    def _socket_message_received(self, socket):
         (identity, msg) = socket.recv_multipart()  # identity is topic
 
         try:
@@ -257,5 +269,5 @@ class StatusSubscribe(object):
             if self._fsm.isstate('trying'):
                 self._fsm.full_update_received()
 
-        if self.socket_message_received_cb:
-            self.socket_message_received_cb(identity, rx)
+        for cb in self.on_socket_message_received:
+            cb(identity, rx)

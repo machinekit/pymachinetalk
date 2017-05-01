@@ -12,19 +12,20 @@ class ErrorBase(object):
     def __init__(self, debuglevel=0, debugname='Error Base'):
         self.debuglevel = debuglevel
         self.debugname = debugname
-        self.error_string = ''
+        self._error_string = ''
+        self.on_error_string_changed = []
 
         # Error
         self._error_channel = ErrorSubscribe(debuglevel=debuglevel)
         self._error_channel.debugname = '%s - %s' % (self.debugname, 'error')
-        self._error_channel.state_changed_cb = self.error_channel_state_changed
-        self._error_channel.socket_message_received_cb = self.error_channel_message_received
+        self._error_channel.on_state_changed.append(self._error_channel_state_changed)
+        self._error_channel.on_socket_message_received.append(self._error_channel_message_received)
         # more efficient to reuse protobuf messages
         self._error_rx = Container()
 
         # callbacks
-        self.error_message_received_cb = None
-        self.state_changed_cb = None
+        self.on_error_message_received = []
+        self.on_state_changed = []
 
         # fsm
         self._fsm = Fysom({'initial': 'down',
@@ -49,8 +50,8 @@ class ErrorBase(object):
     def _on_fsm_down(self, _):
         if self.debuglevel > 0:
             print('[%s]: state DOWN' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('down')
+        for cb in self.on_state_changed:
+            cb('down')
         return True
 
     def _on_fsm_connect(self, _):
@@ -63,8 +64,8 @@ class ErrorBase(object):
     def _on_fsm_trying(self, _):
         if self.debuglevel > 0:
             print('[%s]: state TRYING' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('trying')
+        for cb in self.on_state_changed:
+            cb('trying')
         return True
 
     def _on_fsm_error_up(self, _):
@@ -81,8 +82,8 @@ class ErrorBase(object):
     def _on_fsm_up(self, _):
         if self.debuglevel > 0:
             print('[%s]: state UP' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('up')
+        for cb in self.on_state_changed:
+            cb('up')
         return True
 
     def _on_fsm_error_trying(self, _):
@@ -101,6 +102,18 @@ class ErrorBase(object):
             print('[%s]: state UP exit' % self.debugname)
         self.clear_connected()
         return True
+
+    @property
+    def error_string(self):
+        return self._error_string
+
+    @error_string.setter
+    def error_string(self, string):
+        if self._error_string is string:
+            return
+        self._error_string = string
+        for cb in self.on_error_string_changed:
+            cb(string)
 
     @property
     def error_uri(self):
@@ -145,7 +158,7 @@ class ErrorBase(object):
         self._error_channel.stop()
 
     # process all messages received on error
-    def error_channel_message_received(self, identity, rx):
+    def _error_channel_message_received(self, identity, rx):
 
         # react to emc nml error message
         if rx.type == pb.MT_EMC_NML_ERROR:
@@ -171,8 +184,8 @@ class ErrorBase(object):
         elif rx.type == pb.MT_EMC_OPERATOR_DISPLAY:
             self.emc_operator_display_received(identity, rx)
 
-        if self.error_message_received_cb:
-            self.error_message_received_cb(identity, rx)
+        for cb in self.on_error_message_received:
+            cb(identity, rx)
 
     def emc_nml_error_received(self, identity, rx):
         print('SLOT emc nml error unimplemented')
@@ -192,7 +205,7 @@ class ErrorBase(object):
     def emc_operator_display_received(self, identity, rx):
         print('SLOT emc operator display unimplemented')
 
-    def error_channel_state_changed(self, state):
+    def _error_channel_state_changed(self, state):
 
         if (state == 'trying'):
             if self._fsm.isstate('up'):

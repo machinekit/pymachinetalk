@@ -11,7 +11,8 @@ class RpcClient(object):
     def __init__(self, debuglevel=0, debugname='RPC Client'):
         self.debuglevel = debuglevel
         self.debugname = debugname
-        self.error_string = ''
+        self._error_string = ''
+        self.on_error_string_changed = []
         # ZeroMQ
         context = zmq.Context()
         context.linger = 0
@@ -42,8 +43,8 @@ class RpcClient(object):
         self._heartbeat_reset_liveness = 2
 
         # callbacks
-        self.socket_message_received_cb = None
-        self.state_changed_cb = None
+        self.on_socket_message_received = []
+        self.on_state_changed = []
 
         # fsm
         self._fsm = Fysom({'initial': 'down',
@@ -74,8 +75,8 @@ class RpcClient(object):
     def _on_fsm_down(self, _):
         if self.debuglevel > 0:
             print('[%s]: state DOWN' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('down')
+        for cb in self.on_state_changed:
+            cb('down')
         return True
 
     def _on_fsm_start(self, _):
@@ -90,8 +91,8 @@ class RpcClient(object):
     def _on_fsm_trying(self, _):
         if self.debuglevel > 0:
             print('[%s]: state TRYING' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('trying')
+        for cb in self.on_state_changed:
+            cb('trying')
         return True
 
     def _on_fsm_any_msg_received(self, _):
@@ -132,9 +133,21 @@ class RpcClient(object):
     def _on_fsm_up(self, _):
         if self.debuglevel > 0:
             print('[%s]: state UP' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('up')
+        for cb in self.on_state_changed:
+            cb('up')
         return True
+
+    @property
+    def error_string(self):
+        return self._error_string
+
+    @error_string.setter
+    def error_string(self, string):
+        if self._error_string is string:
+            return
+        self._error_string = string
+        for cb in self.on_error_string_changed:
+            cb(string)
 
     def start(self):
         if self._fsm.isstate('down'):
@@ -168,16 +181,15 @@ class RpcClient(object):
             if pipe in s:
                 socket.send(pipe.recv(), zmq.NOBLOCK)
             if socket in s:
-                self.socket_message_received(socket)
+                self._socket_message_received(socket)
 
     def start_socket(self):
         self._thread = threading.Thread(target=self._socket_worker,
-                                       args=(self._context, self.socket_uri,))
+                                        args=(self._context, self.socket_uri,))
         self._thread.start()
 
     def stop_socket(self):
         self._shutdown.send(' ')  # trigger socket thread shutdown
-        self._thread.join()
         self._thread = None
 
     def _heartbeat_timer_tick(self):
@@ -233,7 +245,7 @@ class RpcClient(object):
         self._heartbeat_lock.release()
 
     # process all messages received on socket
-    def socket_message_received(self, socket):
+    def _socket_message_received(self, socket):
         msg = socket.recv()
 
         try:
@@ -259,8 +271,8 @@ class RpcClient(object):
         if rx.type == pb.MT_PING_ACKNOWLEDGE:
             return   # ping acknowledge is uninteresting
 
-        if self.socket_message_received_cb:
-            self.socket_message_received_cb(rx)
+        for cb in self.on_socket_message_received:
+            cb(rx)
 
     def send_socket_message(self, msg_type, tx):
         with self._tx_lock:

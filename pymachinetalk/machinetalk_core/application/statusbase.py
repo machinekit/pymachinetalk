@@ -12,19 +12,20 @@ class StatusBase(object):
     def __init__(self, debuglevel=0, debugname='Status Base'):
         self.debuglevel = debuglevel
         self.debugname = debugname
-        self.error_string = ''
+        self._error_string = ''
+        self.on_error_string_changed = []
 
         # Status
         self._status_channel = StatusSubscribe(debuglevel=debuglevel)
         self._status_channel.debugname = '%s - %s' % (self.debugname, 'status')
-        self._status_channel.state_changed_cb = self.status_channel_state_changed
-        self._status_channel.socket_message_received_cb = self.status_channel_message_received
+        self._status_channel.on_state_changed.append(self._status_channel_state_changed)
+        self._status_channel.on_socket_message_received.append(self._status_channel_message_received)
         # more efficient to reuse protobuf messages
         self._status_rx = Container()
 
         # callbacks
-        self.status_message_received_cb = None
-        self.state_changed_cb = None
+        self.on_status_message_received = []
+        self.on_state_changed = []
 
         # fsm
         self._fsm = Fysom({'initial': 'down',
@@ -54,8 +55,8 @@ class StatusBase(object):
     def _on_fsm_down(self, _):
         if self.debuglevel > 0:
             print('[%s]: state DOWN' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('down')
+        for cb in self.on_state_changed:
+            cb('down')
         return True
 
     def _on_fsm_connect(self, _):
@@ -68,8 +69,8 @@ class StatusBase(object):
     def _on_fsm_trying(self, _):
         if self.debuglevel > 0:
             print('[%s]: state TRYING' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('trying')
+        for cb in self.on_state_changed:
+            cb('trying')
         return True
 
     def _on_fsm_status_up(self, _):
@@ -86,8 +87,8 @@ class StatusBase(object):
     def _on_fsm_syncing(self, _):
         if self.debuglevel > 0:
             print('[%s]: state SYNCING' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('syncing')
+        for cb in self.on_state_changed:
+            cb('syncing')
         return True
 
     def _on_fsm_channels_synced(self, _):
@@ -103,8 +104,8 @@ class StatusBase(object):
     def _on_fsm_up(self, _):
         if self.debuglevel > 0:
             print('[%s]: state UP' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('up')
+        for cb in self.on_state_changed:
+            cb('up')
         return True
 
     def _on_fsm_up_entry(self, _):
@@ -118,6 +119,18 @@ class StatusBase(object):
             print('[%s]: state UP exit' % self.debugname)
         self.unsync_status()
         return True
+
+    @property
+    def error_string(self):
+        return self._error_string
+
+    @error_string.setter
+    def error_string(self, string):
+        if self._error_string is string:
+            return
+        self._error_string = string
+        for cb in self.on_error_string_changed:
+            cb(string)
 
     @property
     def status_uri(self):
@@ -166,7 +179,7 @@ class StatusBase(object):
         self._status_channel.stop()
 
     # process all messages received on status
-    def status_channel_message_received(self, identity, rx):
+    def _status_channel_message_received(self, identity, rx):
 
         # react to emcstat full update message
         if rx.type == pb.MT_EMCSTAT_FULL_UPDATE:
@@ -176,8 +189,8 @@ class StatusBase(object):
         elif rx.type == pb.MT_EMCSTAT_INCREMENTAL_UPDATE:
             self.emcstat_incremental_update_received(identity, rx)
 
-        if self.status_message_received_cb:
-            self.status_message_received_cb(identity, rx)
+        for cb in self.on_status_message_received:
+            cb(identity, rx)
 
     def emcstat_full_update_received(self, identity, rx):
         print('SLOT emcstat full update unimplemented')
@@ -185,7 +198,7 @@ class StatusBase(object):
     def emcstat_incremental_update_received(self, identity, rx):
         print('SLOT emcstat incremental update unimplemented')
 
-    def status_channel_state_changed(self, state):
+    def _status_channel_state_changed(self, state):
 
         if (state == 'trying'):
             if self._fsm.isstate('up'):

@@ -12,20 +12,21 @@ class CommandBase(object):
     def __init__(self, debuglevel=0, debugname='Command Base'):
         self.debuglevel = debuglevel
         self.debugname = debugname
-        self.error_string = ''
+        self._error_string = ''
+        self.on_error_string_changed = []
 
         # Command
         self._command_channel = RpcClient(debuglevel=debuglevel)
         self._command_channel.debugname = '%s - %s' % (self.debugname, 'command')
-        self._command_channel.state_changed_cb = self.command_channel_state_changed
-        self._command_channel.socket_message_received_cb = self.command_channel_message_received
+        self._command_channel.on_state_changed.append(self._command_channel_state_changed)
+        self._command_channel.on_socket_message_received.append(self._command_channel_message_received)
         # more efficient to reuse protobuf messages
         self._command_rx = Container()
         self._command_tx = Container()
 
         # callbacks
-        self.command_message_received_cb = None
-        self.state_changed_cb = None
+        self.on_command_message_received = []
+        self.on_state_changed = []
 
         # fsm
         self._fsm = Fysom({'initial': 'down',
@@ -50,8 +51,8 @@ class CommandBase(object):
     def _on_fsm_down(self, _):
         if self.debuglevel > 0:
             print('[%s]: state DOWN' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('down')
+        for cb in self.on_state_changed:
+            cb('down')
         return True
 
     def _on_fsm_connect(self, _):
@@ -63,8 +64,8 @@ class CommandBase(object):
     def _on_fsm_trying(self, _):
         if self.debuglevel > 0:
             print('[%s]: state TRYING' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('trying')
+        for cb in self.on_state_changed:
+            cb('trying')
         return True
 
     def _on_fsm_command_up(self, _):
@@ -82,8 +83,8 @@ class CommandBase(object):
     def _on_fsm_up(self, _):
         if self.debuglevel > 0:
             print('[%s]: state UP' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('up')
+        for cb in self.on_state_changed:
+            cb('up')
         return True
 
     def _on_fsm_command_trying(self, _):
@@ -102,6 +103,18 @@ class CommandBase(object):
             print('[%s]: state UP exit' % self.debugname)
         self.clear_connected()
         return True
+
+    @property
+    def error_string(self):
+        return self._error_string
+
+    @error_string.setter
+    def error_string(self, string):
+        if self._error_string is string:
+            return
+        self._error_string = string
+        for cb in self.on_error_string_changed:
+            cb(string)
 
     @property
     def command_uri(self):
@@ -134,7 +147,7 @@ class CommandBase(object):
         self._command_channel.stop()
 
     # process all messages received on command
-    def command_channel_message_received(self, rx):
+    def _command_channel_message_received(self, rx):
 
         # react to emccmd executed message
         if rx.type == pb.MT_EMCCMD_EXECUTED:
@@ -151,8 +164,8 @@ class CommandBase(object):
             for note in rx.note:
                 self.error_string += note + '\n'
 
-        if self.command_message_received_cb:
-            self.command_message_received_cb(rx)
+        for cb in self.on_command_message_received:
+            cb(rx)
 
     def emccmd_executed_received(self, rx):
         print('SLOT emccmd executed unimplemented')
@@ -310,7 +323,7 @@ class CommandBase(object):
     def send_shutdown(self, tx):
         self.send_command_message(pb.MT_SHUTDOWN, tx)
 
-    def command_channel_state_changed(self, state):
+    def _command_channel_state_changed(self, state):
 
         if (state == 'trying'):
             if self._fsm.isstate('up'):
