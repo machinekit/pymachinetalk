@@ -79,8 +79,8 @@ class Pin(object):
 
 class RemoteComponent(ComponentBase, RemoteComponentBase, ServiceContainer):
     def __init__(self, name, debug=False):
-        ComponentBase.__init__(self)
         RemoteComponentBase.__init__(self, debuglevel=int(debug))
+        ComponentBase.__init__(self)
         ServiceContainer.__init__(self)
         self.connected_condition = threading.Condition(threading.Lock())
         self.debug = debug
@@ -165,6 +165,9 @@ class RemoteComponent(ComponentBase, RemoteComponentBase, ServiceContainer):
             self.pin_update(rpin, lpin)
 
         self.pins_synced()  # accept that pins have been synced
+
+    def halrcomp_error_received(self, _, rx):
+        pass
 
     # create a new HAL pin
     def newpin(self, name, pintype, direction):

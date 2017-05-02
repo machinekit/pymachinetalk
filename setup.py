@@ -32,7 +32,7 @@ from distutils.spawn import find_executable
 
 if __name__ == '__main__':
     setup(name="pymachinetalk",
-          version="0.9.99",
+          version="0.9.100",
           description="Python bindings for Machinetalk",
           author="Alexander Roessler",
           author_email="alex@machinekoder.com",

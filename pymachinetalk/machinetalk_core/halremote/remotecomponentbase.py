@@ -13,13 +13,14 @@ class RemoteComponentBase(object):
     def __init__(self, debuglevel=0, debugname='Remote Component Base'):
         self.debuglevel = debuglevel
         self.debugname = debugname
-        self.error_string = ''
+        self._error_string = ''
+        self.on_error_string_changed = []
 
         # Halrcmd
         self._halrcmd_channel = RpcClient(debuglevel=debuglevel)
         self._halrcmd_channel.debugname = '%s - %s' % (self.debugname, 'halrcmd')
-        self._halrcmd_channel.state_changed_cb = self.halrcmd_channel_state_changed
-        self._halrcmd_channel.socket_message_received_cb = self.halrcmd_channel_message_received
+        self._halrcmd_channel.on_state_changed.append(self._halrcmd_channel_state_changed)
+        self._halrcmd_channel.on_socket_message_received.append(self._halrcmd_channel_message_received)
         # more efficient to reuse protobuf messages
         self._halrcmd_rx = Container()
         self._halrcmd_tx = Container()
@@ -27,15 +28,15 @@ class RemoteComponentBase(object):
         # Halrcomp
         self._halrcomp_channel = HalrcompSubscribe(debuglevel=debuglevel)
         self._halrcomp_channel.debugname = '%s - %s' % (self.debugname, 'halrcomp')
-        self._halrcomp_channel.state_changed_cb = self.halrcomp_channel_state_changed
-        self._halrcomp_channel.socket_message_received_cb = self.halrcomp_channel_message_received
+        self._halrcomp_channel.on_state_changed.append(self._halrcomp_channel_state_changed)
+        self._halrcomp_channel.on_socket_message_received.append(self._halrcomp_channel_message_received)
         # more efficient to reuse protobuf messages
         self._halrcomp_rx = Container()
 
         # callbacks
-        self.halrcmd_message_received_cb = None
-        self.halrcomp_message_received_cb = None
-        self.state_changed_cb = None
+        self.on_halrcmd_message_received = []
+        self.on_halrcomp_message_received = []
+        self.on_state_changed = []
 
         # fsm
         self._fsm = Fysom({'initial': 'down',
@@ -92,8 +93,8 @@ class RemoteComponentBase(object):
     def _on_fsm_down(self, _):
         if self.debuglevel > 0:
             print('[%s]: state DOWN' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('down')
+        for cb in self.on_state_changed:
+            cb('down')
         return True
 
     def _on_fsm_connect(self, _):
@@ -118,8 +119,8 @@ class RemoteComponentBase(object):
     def _on_fsm_trying(self, _):
         if self.debuglevel > 0:
             print('[%s]: state TRYING' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('trying')
+        for cb in self.on_state_changed:
+            cb('trying')
         return True
 
     def _on_fsm_halrcmd_up(self, _):
@@ -139,8 +140,8 @@ class RemoteComponentBase(object):
     def _on_fsm_bind(self, _):
         if self.debuglevel > 0:
             print('[%s]: state BIND' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('bind')
+        for cb in self.on_state_changed:
+            cb('bind')
         return True
 
     def _on_fsm_halrcomp_bind_msg_sent(self, _):
@@ -157,8 +158,8 @@ class RemoteComponentBase(object):
     def _on_fsm_binding(self, _):
         if self.debuglevel > 0:
             print('[%s]: state BINDING' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('binding')
+        for cb in self.on_state_changed:
+            cb('binding')
         return True
 
     def _on_fsm_bind_confirmed(self, _):
@@ -181,8 +182,8 @@ class RemoteComponentBase(object):
     def _on_fsm_syncing(self, _):
         if self.debuglevel > 0:
             print('[%s]: state SYNCING' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('syncing')
+        for cb in self.on_state_changed:
+            cb('syncing')
         return True
 
     def _on_fsm_halrcomp_up(self, _):
@@ -200,8 +201,8 @@ class RemoteComponentBase(object):
     def _on_fsm_sync(self, _):
         if self.debuglevel > 0:
             print('[%s]: state SYNC' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('sync')
+        for cb in self.on_state_changed:
+            cb('sync')
         return True
 
     def _on_fsm_pins_synced(self, _):
@@ -212,8 +213,8 @@ class RemoteComponentBase(object):
     def _on_fsm_synced(self, _):
         if self.debuglevel > 0:
             print('[%s]: state SYNCED' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('synced')
+        for cb in self.on_state_changed:
+            cb('synced')
         return True
 
     def _on_fsm_halrcomp_trying(self, _):
@@ -244,8 +245,8 @@ class RemoteComponentBase(object):
     def _on_fsm_error(self, _):
         if self.debuglevel > 0:
             print('[%s]: state ERROR' % self.debugname)
-        if self.state_changed_cb:
-            self.state_changed_cb('error')
+        for cb in self.on_state_changed:
+            cb('error')
         return True
 
     def _on_fsm_error_entry(self, _):
@@ -253,6 +254,18 @@ class RemoteComponentBase(object):
             print('[%s]: state ERROR entry' % self.debugname)
         self.set_error()
         return True
+
+    @property
+    def error_string(self):
+        return self._error_string
+
+    @error_string.setter
+    def error_string(self, string):
+        if self._error_string is string:
+            return
+        self._error_string = string
+        for cb in self.on_error_string_changed:
+            cb(string)
 
     @property
     def halrcmd_uri(self):
@@ -343,7 +356,7 @@ class RemoteComponentBase(object):
         self._halrcomp_channel.stop()
 
     # process all messages received on halrcmd
-    def halrcmd_channel_message_received(self, rx):
+    def _halrcmd_channel_message_received(self, rx):
 
         # react to halrcomp bind confirm message
         if rx.type == pb.MT_HALRCOMP_BIND_CONFIRM:
@@ -368,11 +381,11 @@ class RemoteComponentBase(object):
             if self._fsm.isstate('synced'):
                 self._fsm.set_rejected()
 
-        if self.halrcmd_message_received_cb:
-            self.halrcmd_message_received_cb(rx)
+        for cb in self.on_halrcmd_message_received:
+            cb(rx)
 
     # process all messages received on halrcomp
-    def halrcomp_channel_message_received(self, identity, rx):
+    def _halrcomp_channel_message_received(self, identity, rx):
 
         # react to halrcomp full update message
         if rx.type == pb.MT_HALRCOMP_FULL_UPDATE:
@@ -392,8 +405,8 @@ class RemoteComponentBase(object):
                 self._fsm.sync_failed()
             self.halrcomp_error_received(identity, rx)
 
-        if self.halrcomp_message_received_cb:
-            self.halrcomp_message_received_cb(identity, rx)
+        for cb in self.on_halrcomp_message_received:
+            cb(identity, rx)
 
     def halrcomp_full_update_received(self, identity, rx):
         print('SLOT halrcomp full update unimplemented')
@@ -421,7 +434,7 @@ class RemoteComponentBase(object):
     def send_halrcomp_set(self, tx):
         self.send_halrcmd_message(pb.MT_HALRCOMP_SET, tx)
 
-    def halrcmd_channel_state_changed(self, state):
+    def _halrcmd_channel_state_changed(self, state):
 
         if (state == 'trying'):
             if self._fsm.isstate('syncing'):
@@ -435,7 +448,7 @@ class RemoteComponentBase(object):
             if self._fsm.isstate('trying'):
                 self._fsm.halrcmd_up()
 
-    def halrcomp_channel_state_changed(self, state):
+    def _halrcomp_channel_state_changed(self, state):
 
         if (state == 'trying'):
             if self._fsm.isstate('synced'):
