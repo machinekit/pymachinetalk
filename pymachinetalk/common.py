@@ -1,5 +1,6 @@
 import sys
 
+
 class MessageObject():
     def __init__(self):
         self.is_position = False

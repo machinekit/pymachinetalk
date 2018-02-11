@@ -88,7 +88,7 @@ class ServiceDiscoveryFilter(object):
         if not isinstance(info, ServiceInfo):
             raise TypeError('must pass a ServiceInfo object')
         match = True
-        if not self.name in info.name:
+        if self.name not in info.name:
             match = False
         for name, value in self.txt_records.iteritems():
             if not info.properties[name] == value:

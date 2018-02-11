@@ -1,14 +1,17 @@
 import pytest
 
+
 @pytest.fixture
 def application():
     from pymachinetalk import application
     return application
 
+
 @pytest.fixture
 def dns_sd():
     from pymachinetalk import dns_sd
     return dns_sd
+
 
 def test_application_integration(application, dns_sd):
     status = application.ApplicationStatus()

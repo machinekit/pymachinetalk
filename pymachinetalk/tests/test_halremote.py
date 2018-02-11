@@ -1,14 +1,17 @@
 import pytest
 
+
 @pytest.fixture
 def halremote():
     from pymachinetalk import halremote
     return halremote
 
+
 @pytest.fixture
 def dns_sd():
     from pymachinetalk import dns_sd
     return dns_sd
+
 
 def test_halremote_integration(halremote, dns_sd):
     rcomp = halremote.RemoteComponent('test')

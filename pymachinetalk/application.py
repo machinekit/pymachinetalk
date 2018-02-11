@@ -81,8 +81,8 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
 
         # status containers, also used to expose data
         self._io_data = None
-        self._config_data = None
         self._motion_data = None
+        self._config_data = None
         self._task_data = None
         self._interp_data = None
         # required for object initialization
