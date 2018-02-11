@@ -19,7 +19,7 @@ class StatusSubscribe(object):
         self._context = context
         # pipe to signalize a shutdown
         self._shutdown = context.socket(zmq.PUSH)
-        self._shutdown_uri = b'inproc://shutdown-%s' % uuid.uuid4()
+        self._shutdown_uri = b'inproc://shutdown-%s' % str(uuid.uuid4()).encode()
         self._shutdown.bind(self._shutdown_uri)
         self._thread = None  # socket worker tread
         self._tx_lock = threading.Lock()  # lock for outgoing messages
