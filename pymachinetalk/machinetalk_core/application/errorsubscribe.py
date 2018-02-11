@@ -36,7 +36,7 @@ class ErrorSubscribe(object):
         self._heartbeat_timer = None
         self._heartbeat_active = False
         self._heartbeat_liveness = 0
-        self._heartbeat_reset_liveness = 2
+        self._heartbeat_reset_liveness = 5
 
         # callbacks
         self.on_socket_message_received = []
