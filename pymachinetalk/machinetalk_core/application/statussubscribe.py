@@ -165,7 +165,7 @@ class StatusSubscribe(object):
         poll.register(socket, zmq.POLLIN)
         # subscribe is always connected to socket creation
         for topic in self._socket_topics:
-            socket.setsockopt(zmq.SUBSCRIBE, topic)
+            socket.setsockopt(zmq.SUBSCRIBE, topic.encode())
 
         shutdown = context.socket(zmq.PULL)
         shutdown.connect(self._shutdown_uri)
@@ -185,7 +185,7 @@ class StatusSubscribe(object):
         self._thread.start()
 
     def stop_socket(self):
-        self._shutdown.send(' ')  # trigger socket thread shutdown
+        self._shutdown.send(b' ')  # trigger socket thread shutdown
         self._thread = None
 
     def _heartbeat_timer_tick(self):

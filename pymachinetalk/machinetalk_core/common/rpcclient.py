@@ -189,7 +189,7 @@ class RpcClient(object):
         self._thread.start()
 
     def stop_socket(self):
-        self._shutdown.send(' ')  # trigger socket thread shutdown
+        self._shutdown.send(b' ')  # trigger socket thread shutdown
         self._thread = None
 
     def _heartbeat_timer_tick(self):

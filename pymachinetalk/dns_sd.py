@@ -34,7 +34,7 @@ class Service(object):
         return '_%s._%s.%s.' % (self.base_type, self.protocol, self.domain)
 
     def matches_service_info(self, info):
-        return self.type == info.properties.get('service') \
+        return self.type == info.properties.get(b'service').decode() \
             and self.typestring in info.type
 
     def __eq__(self, other):
@@ -68,9 +68,9 @@ class Service(object):
 
     def _set_all_values_from_service_info(self, info):
         self.name = info.name
-        self.uri = info.properties.get('dsn', '')
-        self.uuid = info.properties.get('uuid', '')
-        self.version = info.properties.get('version', '')
+        self.uri = info.properties.get(b'dsn', '').decode()
+        self.uuid = info.properties.get(b'uuid', '').decode()
+        self.version = info.properties.get(b'version', '')
 
     def _init_all_values(self):
         self.name = ''
