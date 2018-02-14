@@ -108,17 +108,17 @@ def test_unregisteringWhenRunningThrowsError(dns_sd, sd):
 
 class ServiceInfoFactory(object):
     def create(self, base_type='machinekit', domain='local', sd_protocol='tcp',
-               name='Hugo on Franz', service='halrcomp', uuid='12345678',
+               name='Hugo on Franz', service=b'halrcomp', uuid=b'12345678',
                host='127.0.0.1', protocol='tcp', port=12345,
                version=0, properties=None):
         from zeroconf import ServiceInfo
         typestring = '_%s._%s.%s.' % (base_type, sd_protocol, domain)
-        dsn = '%s://%s:%s' % (protocol, host, port)
+        dsn = b'%s://%s:%i' % (protocol.encode(), host.encode(), port)
         if properties is None:
-            properties = {'uuid': uuid,
-                          'service': service,
-                          'dsn': dsn,
-                          'version': version}
+            properties = {b'uuid': uuid,
+                          b'service': service,
+                          b'dsn': dsn,
+                          b'version': version}
         return ServiceInfo(type_=typestring,
                            name='%s %s.%s' % (name, host, typestring),
                            properties=properties,
@@ -203,7 +203,7 @@ def test_serviceInfoSetsAllRelevantValuesOfService(dns_sd):
     service = dns_sd.Service(type_='halrcomp')
     service_info = ServiceInfoFactory().create(
         name='Foo on Bar',
-        uuid='987654321',
+        uuid=b'987654321',
         version=5,
         host='10.0.0.10',
         protocol='tcp',
@@ -226,7 +226,7 @@ def test_serviceInfoWithIncompleteValuesIsIgnoredByService(dns_sd):
 
     assert service.uri == ''
     assert service.uuid == ''
-    assert service.version == ''
+    assert service.version == b''
 
 
 def test_removingServiceInfoResetsAllRelevantValuesOfService(dns_sd):
@@ -353,15 +353,15 @@ def test_discoverableServicesReadyChangedCallsCallback(dns_sd):
 
 
 def test_serviceDiscoveryFilterAcceptCorrectUuid(dns_sd):
-    service_info = ServiceInfoFactory().create(uuid='987654321')
-    filter = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '987654321'})
+    service_info = ServiceInfoFactory().create(uuid=b'987654321')
+    filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'987654321'})
 
     assert filter.matches_service_info(service_info) is True
 
 
 def test_serviceDiscoveryFilterRejectWrongUuid(dns_sd):
-    service_info = ServiceInfoFactory().create(uuid='123456789')
-    filter = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '987654321'})
+    service_info = ServiceInfoFactory().create(uuid=b'123456789')
+    filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'987654321'})
 
     assert filter.matches_service_info(service_info) is False
 
@@ -400,7 +400,7 @@ def test_serviceDiscoveryFilterPassingWrongObjectFails(dns_sd):
 def test_serviceDiscoveryFiltersOutDiscoveredServiceWithWrongUuid(dns_sd, sd, zeroconf):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
-    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '87654321'})
+    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'87654321'})
 
     sd.add_service(zeroconf, '_machinekit._tcp.local.', 'Machinekit on MyBox 12.0.0.1._machinekit._tcp.local.')
 
@@ -410,7 +410,7 @@ def test_serviceDiscoveryFiltersOutDiscoveredServiceWithWrongUuid(dns_sd, sd, ze
 def test_serviceDiscoveryFiltersInDiscoveredServiceWithCorrectUuid(dns_sd, sd, zeroconf):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
-    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '12345678'})
+    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'12345678'})
 
     sd.add_service(zeroconf, '_machinekit._tcp.local.', 'SuperPrint 192.168.7.2._machinekit._tcp.local.')
     assert service.ready is True
@@ -419,7 +419,7 @@ def test_serviceDiscoveryFiltersInDiscoveredServiceWithCorrectUuid(dns_sd, sd, z
 def test_serviceDiscoveryFiltersInDisappearedServiceWithCorrectUuid(dns_sd, sd, zeroconf):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
-    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '12345678'})
+    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'12345678'})
 
     sd.add_service(zeroconf, '_machinekit._tcp.local.', 'SuperPrint 192.168.7.2._machinekit._tcp.local.')
     sd.remove_service(zeroconf, '_machinekit._tcp.local.', 'SuperPrint 192.168.7.2._machinekit._tcp.local.')

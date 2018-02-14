@@ -32,7 +32,8 @@ from distutils.spawn import find_executable
 requirements = ['pyzmq',
                 'zeroconf',
                 'machinetalk-protobuf',
-                'fysom']
+                'fysom',
+                'six']
 
 if __name__ == '__main__':
     setup(name="pymachinetalk",

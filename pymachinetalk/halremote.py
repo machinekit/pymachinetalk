@@ -1,11 +1,11 @@
 import threading
-from dns_sd import ServiceContainer, Service
-from common import ComponentBase
+from .dns_sd import ServiceContainer, Service
+from .common import ComponentBase
 
 # protobuf
 from machinetalk.protobuf.message_pb2 import Container
 from machinetalk.protobuf.types_pb2 import HAL_FLOAT, HAL_BIT, HAL_S32, HAL_U32, HAL_IN, HAL_OUT, HAL_IO
-from machinetalk_core.halremote.remotecomponentbase import RemoteComponentBase
+from .machinetalk_core.halremote.remotecomponentbase import RemoteComponentBase
 
 
 class Pin(object):

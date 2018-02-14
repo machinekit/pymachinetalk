@@ -1,4 +1,5 @@
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
+import six
 
 
 class Service(object):
@@ -34,7 +35,7 @@ class Service(object):
         return '_%s._%s.%s.' % (self.base_type, self.protocol, self.domain)
 
     def matches_service_info(self, info):
-        return self.type == info.properties.get(b'service').decode() \
+        return self.type == info.properties.get(b'service', b'').decode() \
             and self.typestring in info.type
 
     def __eq__(self, other):
@@ -68,9 +69,9 @@ class Service(object):
 
     def _set_all_values_from_service_info(self, info):
         self.name = info.name
-        self.uri = info.properties.get(b'dsn', '').decode()
-        self.uuid = info.properties.get(b'uuid', '').decode()
-        self.version = info.properties.get(b'version', '')
+        self.uri = info.properties.get(b'dsn', b'').decode()
+        self.uuid = info.properties.get(b'uuid', b'').decode()
+        self.version = info.properties.get(b'version', b'')
 
     def _init_all_values(self):
         self.name = ''
@@ -90,7 +91,7 @@ class ServiceDiscoveryFilter(object):
         match = True
         if self.name not in info.name:
             match = False
-        for name, value in self.txt_records.iteritems():
+        for name, value in six.iteritems(self.txt_records):
             if not info.properties[name] == value:
                 match = False
                 break
