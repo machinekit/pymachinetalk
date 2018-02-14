@@ -58,13 +58,9 @@ Note that you need a recent version of `fysom` (> 2.0) for pymachinetalk to work
 
 On Debian based distributions you can use the following commands:
 ```bash
-# install Python ZMQ
-sudo apt update
-sudo apt install python-zmq
-
-# install the rest from pip
+# install everything from pip
 sudo apt install python-pip
-sudo pip install machinetalk-protobuf fysom zeroconf
+pip install -e .[dev]
 ```
 
 ### Install
