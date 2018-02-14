@@ -29,17 +29,30 @@ else:
     from distutils.command.build_py import build_py as build_py
 from distutils.spawn import find_executable
 
+requirements = ['pyzmq',
+                'zeroconf',
+                'machinetalk-protobuf',
+                'fysom',
+                'six']
 
 if __name__ == '__main__':
     setup(name="pymachinetalk",
-          version="0.9.100",
+          version="0.9.103",
           description="Python bindings for Machinetalk",
           author="Alexander Roessler",
           author_email="alex@machinekoder.com",
           url="https://github.com/machinekit/pymachinetalk",
           namespace_packages=['pymachinetalk'],
           packages=find_packages(),
-          install_requires=['setuptools', 'pyzmq', 'zeroconf', 'machinetalk-protobuf', 'fysom'],
+          install_requires=requirements,
+          extras_require={
+              'dev': [
+                  'pytest',
+                  'pytest-mock',
+                  'pytest-pep8',
+                  'pytest-cov',
+              ]
+          },
           cmdclass={
               'clean': clean,
               'build_py': build_py,

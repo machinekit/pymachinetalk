@@ -1,4 +1,6 @@
 # Machinetalk bindings for Python
+[![Build Status](https://travis-ci.org/DiffSK/configobj.svg?branch=master)](https://travis-ci.org/machinekit/pymachinetalk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/machinekoder/speed-friending-matcher/blob/master/LICENSE)
 
   This repository contains Machinetalk bindings for
   Python. Machinetalk is the middleware for Machinekit the open source
@@ -58,13 +60,9 @@ Note that you need a recent version of `fysom` (> 2.0) for pymachinetalk to work
 
 On Debian based distributions you can use the following commands:
 ```bash
-# install Python ZMQ
-sudo apt update
-sudo apt install python-zmq
-
-# install the rest from pip
+# install everything from pip
 sudo apt install python-pip
-sudo pip install machinetalk-protobuf fysom zeroconf
+pip install -e .[dev]
 ```
 
 ### Install

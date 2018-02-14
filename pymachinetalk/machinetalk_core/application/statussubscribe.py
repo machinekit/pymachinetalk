@@ -19,7 +19,7 @@ class StatusSubscribe(object):
         self._context = context
         # pipe to signalize a shutdown
         self._shutdown = context.socket(zmq.PUSH)
-        self._shutdown_uri = b'inproc://shutdown-%s' % uuid.uuid4()
+        self._shutdown_uri = b'inproc://shutdown-%s' % str(uuid.uuid4()).encode()
         self._shutdown.bind(self._shutdown_uri)
         self._thread = None  # socket worker tread
         self._tx_lock = threading.Lock()  # lock for outgoing messages
@@ -36,7 +36,7 @@ class StatusSubscribe(object):
         self._heartbeat_timer = None
         self._heartbeat_active = False
         self._heartbeat_liveness = 0
-        self._heartbeat_reset_liveness = 2
+        self._heartbeat_reset_liveness = 5
 
         # callbacks
         self.on_socket_message_received = []
@@ -165,7 +165,7 @@ class StatusSubscribe(object):
         poll.register(socket, zmq.POLLIN)
         # subscribe is always connected to socket creation
         for topic in self._socket_topics:
-            socket.setsockopt(zmq.SUBSCRIBE, topic)
+            socket.setsockopt(zmq.SUBSCRIBE, topic.encode())
 
         shutdown = context.socket(zmq.PULL)
         shutdown.connect(self._shutdown_uri)
@@ -185,7 +185,7 @@ class StatusSubscribe(object):
         self._thread.start()
 
     def stop_socket(self):
-        self._shutdown.send(' ')  # trigger socket thread shutdown
+        self._shutdown.send(b' ')  # trigger socket thread shutdown
         self._thread = None
 
     def _heartbeat_timer_tick(self):

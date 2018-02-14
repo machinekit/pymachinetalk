@@ -1,18 +1,18 @@
 import os
-from urlparse import urlparse
+from six.moves.urllib.parse import urlparse
 import ftplib
 import threading
-from dns_sd import ServiceContainer, Service
+from .dns_sd import ServiceContainer, Service
 
 # protobuf
-from common import MessageObject, recurse_descriptor, recurse_message, ComponentBase
+from .common import MessageObject, recurse_descriptor, recurse_message, ComponentBase
 from machinetalk.protobuf.message_pb2 import Container
 import machinetalk.protobuf.types_pb2 as types
 import machinetalk.protobuf.motcmds_pb2 as motcmds
 from machinetalk.protobuf.status_pb2 import *
-from machinetalk_core.application.statusbase import StatusBase
-from machinetalk_core.application.commandbase import CommandBase
-from machinetalk_core.application.errorbase import ErrorBase
+from .machinetalk_core.application.statusbase import StatusBase
+from .machinetalk_core.application.commandbase import CommandBase
+from .machinetalk_core.application.errorbase import ErrorBase
 
 ORIGIN_G54 = types.ORIGIN_G54
 ORIGIN_G55 = types.ORIGIN_G55
@@ -81,8 +81,8 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
 
         # status containers, also used to expose data
         self._io_data = None
-        self._config_data = None
         self._motion_data = None
+        self._config_data = None
         self._task_data = None
         self._interp_data = None
         # required for object initialization
