@@ -1,4 +1,6 @@
 # Machinetalk bindings for Python
+[![Build Status](https://travis-ci.org/DiffSK/configobj.svg?branch=master)](https://travis-ci.org/machinekit/pymachinetalk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/machinekoder/speed-friending-matcher/blob/master/LICENSE)
 
   This repository contains Machinetalk bindings for
   Python. Machinetalk is the middleware for Machinekit the open source
