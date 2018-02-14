@@ -37,7 +37,7 @@ requirements = ['pyzmq',
 
 if __name__ == '__main__':
     setup(name="pymachinetalk",
-          version="0.9.102",
+          version="0.9.103",
           description="Python bindings for Machinetalk",
           author="Alexander Roessler",
           author_email="alex@machinekoder.com",
