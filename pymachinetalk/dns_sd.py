@@ -1,6 +1,8 @@
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
 import six
 
+_LOOKUP_INTERVAL = 500
+
 
 class Service(object):
     def __init__(self, type_=''):
@@ -99,25 +101,52 @@ class ServiceDiscoveryFilter(object):
 
 
 class ServiceDiscovery(object):
-    def __init__(self, service_type='machinekit', filter_=ServiceDiscoveryFilter()):
+    def __init__(self, service_type='machinekit', filter_=ServiceDiscoveryFilter(),
+                 nameservers=[], lookup_interval=_LOOKUP_INTERVAL):
+        """ Initialize the multicast or unicast DNS-SD service discovery instance.
+        @param service_type DNS-SD type use for discovery, does not need to be changed for Machinekit.
+        @param filter Optional filter can be used to look for specific instances.
+        @param nameservers Pass one or more nameserver addresses to enabled unicast service discovery.
+        @param lookup_interval How often the SD should send out service queries.
+        """
         self.service_type = service_type
         self.filter = filter_
+        self.nameservers = nameservers
+        self.lookup_interval = lookup_interval
 
         self.is_ready = False
         self.services = []
-        self.browser = None
-        self.zeroconf = None
+        self._browsers = None
+        self._zeroconfs = None
 
     def _start_discovery(self):
-        self.zeroconf = Zeroconf()
+        self._zeroconfs = []
+        self._browsers = []
+        if any(self.nameservers):
+            self._start_unicast_discovery()
+        else:
+            self._start_multicast_discovery()
+
+    def _start_multicast_discovery(self):
         type_string = '_%s._tcp.local.' % self.service_type
-        self.browser = ServiceBrowser(self.zeroconf, type_string, self)
+        zeroconf = Zeroconf()
+        self._zeroconfs.append(zeroconf)
+        self._browsers.append(ServiceBrowser(zeroconf, type_string, self, delay=self.lookup_interval))
+
+    def _start_unicast_discovery(self):
+        for service in self.services:
+            type_string = '_%s._sub._%s._tcp.local.' % (service.type, self.service_type)
+            zeroconf = Zeroconf(unicast=True)
+            self._zeroconfs.append(zeroconf)
+            for nameserver in self.nameservers:
+                self._browsers.append(ServiceBrowser(zeroconf, type_string, self,
+                                                     addr=nameserver, delay=self.lookup_interval))
 
     def _stop_discovery(self):
-        if self.zeroconf:
-            self.zeroconf.close()
-            self.zeroconf = None
-        self.browser = None
+        for zeroconf in self._zeroconfs:
+            zeroconf.close()
+        del self._zeroconfs[:]
+        del self._browsers[:]
         for service in self.services:
             service.clear_service_infos()
 
@@ -157,12 +186,12 @@ class ServiceDiscovery(object):
         self._verify_item_and_run(item, self.services.remove)
 
     def start(self):
-        if not self.browser:
+        if not self._browsers:
             self.is_ready = True
             self._start_discovery()
 
     def stop(self):
-        if self.browser:
+        if self._browsers:
             self.is_ready = False
             self._stop_discovery()
 
