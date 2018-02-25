@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 import socket
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
 import six
@@ -79,7 +80,7 @@ class Service(object):
         self._raw_uri = info.properties.get(b'dsn', b'').decode()
         self.uuid = info.properties.get(b'uuid', b'').decode()
         self.version = info.properties.get(b'version', b'')
-        self.host_name = info.server.decode()
+        self.host_name = info.server
         try:
             self.host_address = str(socket.inet_ntoa(info.address))
         except Exception:
@@ -88,13 +89,9 @@ class Service(object):
 
     def _update_uri(self):
         url = urlparse(self._raw_uri)
-        try:
-            host = url.hostname.decode()
-        except Exception:
-            self._uri = ''
-            return
+        host = url.hostname
         if host.lower() in self.host_name.lower():  # hostname is in form .local. and host in .local
-            netloc = url.netloc.decode()
+            netloc = url.netloc
             netloc = netloc.replace(host, self.host_address)
             new_url = url._replace(netloc=netloc)  # use resolved address
             self.uri = new_url.geturl()
