@@ -1,4 +1,5 @@
 import pytest
+import socket
 
 
 @pytest.fixture
@@ -110,7 +111,7 @@ class ServiceInfoFactory(object):
     def create(self, base_type='machinekit', domain='local', sd_protocol='tcp',
                name='Hugo on Franz', service=b'halrcomp', uuid=b'12345678',
                host='127.0.0.1', protocol='tcp', port=12345,
-               version=0, properties=None):
+               version=0, properties=None, server='127.0.0.1', address=None):
         from zeroconf import ServiceInfo
         typestring = '_%s._%s.%s.' % (base_type, sd_protocol, domain)
         dsn = b'%s://%s:%i' % (protocol.encode(), host.encode(), port)
@@ -122,8 +123,9 @@ class ServiceInfoFactory(object):
         return ServiceInfo(type_=typestring,
                            name='%s %s.%s' % (name, host, typestring),
                            properties=properties,
-                           address=host,
-                           port=port)
+                           address=address or host,
+                           port=port,
+                           server=server)
 
 
 @pytest.fixture
@@ -207,7 +209,8 @@ def test_serviceInfoSetsAllRelevantValuesOfService(dns_sd):
         version=5,
         host='10.0.0.10',
         protocol='tcp',
-        port=12456
+        port=12456,
+        server='sandybox.local'
     )
 
     service.add_service_info(service_info)
@@ -216,6 +219,38 @@ def test_serviceInfoSetsAllRelevantValuesOfService(dns_sd):
     assert service.name == service_info.name
     assert service.uuid == '987654321'
     assert service.version == 5
+    assert service.host_name == 'sandybox.local'
+    assert service.host_address == '10.0.0.10'
+
+
+def test_serviceInfoResolvesLocalHostnameIfMatched(dns_sd):
+    service = dns_sd.Service(type_='halrcomp')
+    service_info = ServiceInfoFactory().create(
+        host='sandybox.local',
+        protocol='tcp',
+        port=12456,
+        server='sandybox.local',
+        address='10.0.0.10'
+    )
+
+    service.add_service_info(service_info)
+
+    assert service.uri == 'tcp://10.0.0.10:12456'
+
+
+def test_serviceInfoRetursRawUriIfHostnameIsNotMatched(dns_sd):
+    service = dns_sd.Service(type_='halrcomp')
+    service_info = ServiceInfoFactory().create(
+        host='thinkpad.local',
+        protocol='tcp',
+        port=12456,
+        server='sandybox.local',
+        address='10.0.0.10'
+    )
+
+    service.add_service_info(service_info)
+
+    assert service.uri == 'tcp://thinkpad.local:12456'
 
 
 def test_serviceInfoWithIncompleteValuesIsIgnoredByService(dns_sd):
@@ -240,6 +275,8 @@ def test_removingServiceInfoResetsAllRelevantValuesOfService(dns_sd):
     assert service.name == ''
     assert service.uuid == ''
     assert service.version == 0
+    assert service.host_name == ''
+    assert service.host_address == ''
 
 
 def test_clearingServiceInfosResetsValuesOfService(dns_sd):

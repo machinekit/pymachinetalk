@@ -1,5 +1,7 @@
+import socket
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
 import six
+from six.moves.urllib.parse import urlparse
 
 _LOOKUP_INTERVAL = 500
 
@@ -13,7 +15,10 @@ class Service(object):
         self.name = ''
         self.uri = ''
         self.uuid = ''
+        self.host_name = ''
+        self.host_address = ''
         self.version = 0
+        self._raw_uri = ''
         self._ready = False
 
         self.service_infos = []
@@ -61,7 +66,7 @@ class Service(object):
         self._update()
 
     def _update(self):
-        if len(self.service_infos) > 0:
+        if any(self.service_infos):
             info = self.service_infos[0]
             self._set_all_values_from_service_info(info)
             self.ready = True
@@ -71,14 +76,37 @@ class Service(object):
 
     def _set_all_values_from_service_info(self, info):
         self.name = info.name
-        self.uri = info.properties.get(b'dsn', b'').decode()
+        self._raw_uri = info.properties.get(b'dsn', b'').decode()
         self.uuid = info.properties.get(b'uuid', b'').decode()
         self.version = info.properties.get(b'version', b'')
+        self.host_name = info.server.decode()
+        try:
+            self.host_address = str(socket.inet_ntoa(info.address))
+        except Exception:
+            self.host_address = str(info.address)
+        self._update_uri()
+
+    def _update_uri(self):
+        url = urlparse(self._raw_uri)
+        try:
+            host = url.hostname.decode()
+        except Exception:
+            self._uri = ''
+            return
+        if host.lower() in self.host_name.lower():  # hostname is in form .local. and host in .local
+            netloc = url.netloc.decode()
+            netloc = netloc.replace(host, self.host_address)
+            new_url = url._replace(netloc=netloc)  # use resolved address
+            self.uri = new_url.geturl()
+        else:
+            self.uri = self._raw_uri  # pass raw uri
 
     def _init_all_values(self):
         self.name = ''
         self.uri = ''
         self.uuid = ''
+        self.host_name = ''
+        self.host_address = ''
         self.version = 0
 
 
@@ -116,8 +144,8 @@ class ServiceDiscovery(object):
 
         self.is_ready = False
         self.services = []
-        self._browsers = None
-        self._zeroconfs = None
+        self._browsers = []
+        self._zeroconfs = []
 
     def _start_discovery(self):
         self._zeroconfs = []
@@ -191,9 +219,8 @@ class ServiceDiscovery(object):
             self._start_discovery()
 
     def stop(self):
-        if self._browsers:
-            self.is_ready = False
-            self._stop_discovery()
+        self.is_ready = False
+        self._stop_discovery()
 
 
 class ServiceContainer(object):
