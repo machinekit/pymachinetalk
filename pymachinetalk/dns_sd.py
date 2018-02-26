@@ -4,8 +4,6 @@ from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
 import six
 from six.moves.urllib.parse import urlparse
 
-_LOOKUP_INTERVAL = 500
-
 
 class Service(object):
     def __init__(self, type_=''):
@@ -127,7 +125,7 @@ class ServiceDiscoveryFilter(object):
 
 class ServiceDiscovery(object):
     def __init__(self, service_type='machinekit', filter_=ServiceDiscoveryFilter(),
-                 nameservers=[], lookup_interval=_LOOKUP_INTERVAL):
+                 nameservers=[], lookup_interval=None):
         """ Initialize the multicast or unicast DNS-SD service discovery instance.
         @param service_type DNS-SD type use for discovery, does not need to be changed for Machinekit.
         @param filter Optional filter can be used to look for specific instances.
@@ -156,7 +154,10 @@ class ServiceDiscovery(object):
         type_string = '_%s._tcp.local.' % self.service_type
         zeroconf = Zeroconf()
         self._zeroconfs.append(zeroconf)
-        self._browsers.append(ServiceBrowser(zeroconf, type_string, self, delay=self.lookup_interval))
+        kwargs = {}
+        if self.lookup_interval:
+            kwargs['delay'] = self.lookup_interval
+        self._browsers.append(ServiceBrowser(zeroconf, type_string, self, **kwargs))
 
     def _start_unicast_discovery(self):
         for service in self.services:
@@ -164,8 +165,10 @@ class ServiceDiscovery(object):
             zeroconf = Zeroconf(unicast=True)
             self._zeroconfs.append(zeroconf)
             for nameserver in self.nameservers:
-                self._browsers.append(ServiceBrowser(zeroconf, type_string, self,
-                                                     addr=nameserver, delay=self.lookup_interval))
+                kwargs = {'addr': nameserver}
+                if self.lookup_interval:
+                    kwargs['delay'] = self.lookup_interval
+                self._browsers.append(ServiceBrowser(zeroconf, type_string, self, **kwargs))
 
     def _stop_discovery(self):
         for zeroconf in self._zeroconfs:
