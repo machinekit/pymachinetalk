@@ -88,7 +88,8 @@ class Service(object):
     def _update_uri(self):
         url = urlparse(self._raw_uri)
         host = url.hostname
-        if host.lower() in self.host_name.lower():  # hostname is in form .local. and host in .local
+        if not (host is None or self.host_name is None) and \
+           host.lower() in self.host_name.lower():  # hostname is in form .local. and host in .local
             netloc = url.netloc
             netloc = netloc.replace(host, self.host_address)
             new_url = url._replace(netloc=netloc)  # use resolved address
