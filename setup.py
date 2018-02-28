@@ -30,14 +30,17 @@ else:
 from distutils.spawn import find_executable
 
 requirements = ['pyzmq',
-                'zeroconf',
                 'machinetalk-protobuf',
                 'fysom',
                 'six']
+if sys.version_info <= (3, 3):
+    requirements.append('zeroconf<=0.19.1')  # freeze version
+else:
+    requirements.append('zeroconf')
 
 if __name__ == '__main__':
     setup(name="pymachinetalk",
-          version="0.9.103",
+          version="0.10.0",
           description="Python bindings for Machinetalk",
           author="Alexander Roessler",
           author_email="alex@machinekoder.com",

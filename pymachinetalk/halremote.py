@@ -158,7 +158,7 @@ class RemoteComponent(ComponentBase, RemoteComponentBase, ServiceContainer):
 
         comp = rx.comp[0]
         for rpin in comp.pin:
-            name = rpin.name.split('.')[1]
+            name = '.'.join(rpin.name.split('.')[1:])
             lpin = self.pinsbyname[name]
             lpin.handle = rpin.handle
             self.pinsbyhandle[rpin.handle] = lpin

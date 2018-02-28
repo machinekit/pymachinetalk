@@ -1,5 +1,8 @@
+from __future__ import unicode_literals
+import socket
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
 import six
+from six.moves.urllib.parse import urlparse
 
 
 class Service(object):
@@ -11,7 +14,10 @@ class Service(object):
         self.name = ''
         self.uri = ''
         self.uuid = ''
+        self.host_name = ''
+        self.host_address = ''
         self.version = 0
+        self._raw_uri = ''
         self._ready = False
 
         self.service_infos = []
@@ -59,7 +65,7 @@ class Service(object):
         self._update()
 
     def _update(self):
-        if len(self.service_infos) > 0:
+        if any(self.service_infos):
             info = self.service_infos[0]
             self._set_all_values_from_service_info(info)
             self.ready = True
@@ -69,14 +75,34 @@ class Service(object):
 
     def _set_all_values_from_service_info(self, info):
         self.name = info.name
-        self.uri = info.properties.get(b'dsn', b'').decode()
+        self._raw_uri = info.properties.get(b'dsn', b'').decode()
         self.uuid = info.properties.get(b'uuid', b'').decode()
         self.version = info.properties.get(b'version', b'')
+        self.host_name = info.server
+        try:
+            self.host_address = str(socket.inet_ntoa(info.address))
+        except Exception:
+            self.host_address = str(info.address)
+        self._update_uri()
+
+    def _update_uri(self):
+        url = urlparse(self._raw_uri)
+        host = url.hostname
+        if not (host is None or self.host_name is None) and \
+           host.lower() in self.host_name.lower():  # hostname is in form .local. and host in .local
+            netloc = url.netloc
+            netloc = netloc.replace(host, self.host_address)
+            new_url = url._replace(netloc=netloc)  # use resolved address
+            self.uri = new_url.geturl()
+        else:
+            self.uri = self._raw_uri  # pass raw uri
 
     def _init_all_values(self):
         self.name = ''
         self.uri = ''
         self.uuid = ''
+        self.host_name = ''
+        self.host_address = ''
         self.version = 0
 
 
@@ -99,25 +125,57 @@ class ServiceDiscoveryFilter(object):
 
 
 class ServiceDiscovery(object):
-    def __init__(self, service_type='machinekit', filter_=ServiceDiscoveryFilter()):
+    def __init__(self, service_type='machinekit', filter_=ServiceDiscoveryFilter(),
+                 nameservers=[], lookup_interval=None):
+        """ Initialize the multicast or unicast DNS-SD service discovery instance.
+        @param service_type DNS-SD type use for discovery, does not need to be changed for Machinekit.
+        @param filter Optional filter can be used to look for specific instances.
+        @param nameservers Pass one or more nameserver addresses to enabled unicast service discovery.
+        @param lookup_interval How often the SD should send out service queries.
+        """
         self.service_type = service_type
         self.filter = filter_
+        self.nameservers = nameservers
+        self.lookup_interval = lookup_interval
 
         self.is_ready = False
         self.services = []
-        self.browser = None
-        self.zeroconf = None
+        self._browsers = []
+        self._zeroconfs = []
 
     def _start_discovery(self):
-        self.zeroconf = Zeroconf()
+        self._zeroconfs = []
+        self._browsers = []
+        if any(self.nameservers):
+            self._start_unicast_discovery()
+        else:
+            self._start_multicast_discovery()
+
+    def _start_multicast_discovery(self):
         type_string = '_%s._tcp.local.' % self.service_type
-        self.browser = ServiceBrowser(self.zeroconf, type_string, self)
+        zeroconf = Zeroconf()
+        self._zeroconfs.append(zeroconf)
+        kwargs = {}
+        if self.lookup_interval:
+            kwargs['delay'] = self.lookup_interval
+        self._browsers.append(ServiceBrowser(zeroconf, type_string, self, **kwargs))
+
+    def _start_unicast_discovery(self):
+        for service in self.services:
+            type_string = '_%s._sub._%s._tcp.local.' % (service.type, self.service_type)
+            zeroconf = Zeroconf(unicast=True)
+            self._zeroconfs.append(zeroconf)
+            for nameserver in self.nameservers:
+                kwargs = {'addr': nameserver}
+                if self.lookup_interval:
+                    kwargs['delay'] = self.lookup_interval
+                self._browsers.append(ServiceBrowser(zeroconf, type_string, self, **kwargs))
 
     def _stop_discovery(self):
-        if self.zeroconf:
-            self.zeroconf.close()
-            self.zeroconf = None
-        self.browser = None
+        for zeroconf in self._zeroconfs:
+            zeroconf.close()
+        del self._zeroconfs[:]
+        del self._browsers[:]
         for service in self.services:
             service.clear_service_infos()
 
@@ -157,14 +215,13 @@ class ServiceDiscovery(object):
         self._verify_item_and_run(item, self.services.remove)
 
     def start(self):
-        if not self.browser:
+        if not self._browsers:
             self.is_ready = True
             self._start_discovery()
 
     def stop(self):
-        if self.browser:
-            self.is_ready = False
-            self._stop_discovery()
+        self.is_ready = False
+        self._stop_discovery()
 
 
 class ServiceContainer(object):
