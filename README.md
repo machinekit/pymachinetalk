@@ -1,4 +1,5 @@
 # Machinetalk bindings for Python
+[![PyPI version](https://badge.fury.io/py/pymachinetalk.svg)](https://badge.fury.io/py/pymachinetalk)
 [![Build Status](https://travis-ci.org/DiffSK/configobj.svg?branch=master)](https://travis-ci.org/machinekit/pymachinetalk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/machinekoder/speed-friending-matcher/blob/master/LICENSE)
 
