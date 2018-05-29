@@ -1,6 +1,4 @@
-import zmq
-import threading
-import uuid
+# coding=utf-8
 from fysom import Fysom
 from ..common.rpcclient import RpcClient
 
@@ -29,14 +27,16 @@ class CommandBase(object):
         self.on_state_changed = []
 
         # fsm
-        self._fsm = Fysom({'initial': 'down',
-                          'events': [
-                            {'name': 'connect', 'src': 'down', 'dst': 'trying'},
-                            {'name': 'command_up', 'src': 'trying', 'dst': 'up'},
-                            {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
-                            {'name': 'command_trying', 'src': 'up', 'dst': 'trying'},
-                            {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
-                          ]})
+        self._fsm = Fysom(
+            {'initial': 'down',
+             'events': [
+                 {'name': 'connect', 'src': 'down', 'dst': 'trying'},
+                 {'name': 'command_up', 'src': 'trying', 'dst': 'up'},
+                 {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
+                 {'name': 'command_trying', 'src': 'up', 'dst': 'trying'},
+                 {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
+             ]}
+        )
 
         self._fsm.ondown = self._on_fsm_down
         self._fsm.onafterconnect = self._on_fsm_connect
@@ -325,10 +325,10 @@ class CommandBase(object):
 
     def _command_channel_state_changed(self, state):
 
-        if (state == 'trying'):
+        if state == 'trying':
             if self._fsm.isstate('up'):
                 self._fsm.command_trying()
 
-        elif (state == 'up'):
+        elif state == 'up':
             if self._fsm.isstate('trying'):
                 self._fsm.command_up()

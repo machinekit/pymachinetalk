@@ -1,3 +1,4 @@
+# coding=utf-8
 import os
 from six.moves.urllib.parse import urlparse
 import ftplib
@@ -94,7 +95,7 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
         self._initialize_object('interp')
 
         self._synced_channels = set()
-        self.channels = set(['motion', 'config', 'task', 'io', 'interp'])
+        self.channels = {'motion', 'config', 'task', 'io', 'interp'}
 
         self._status_service = Service(type_='service')
         self.add_service(self._status_service)
@@ -201,7 +202,7 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
     # slot
     def update_topics(self):
         self.clear_status_topics()
-        for channel in  self.channels:
+        for channel in self.channels:
             self.add_status_topic(channel)
             self._initialize_object(channel)
 
@@ -250,9 +251,9 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
             self.interp_condition.notify()
 
     def _update_running(self):
-        running = (self._task_data.task_mode == EMC_TASK_MODE_AUTO \
-                   or self._task_data.task_mode == EMC_TASK_MODE_MDI) \
-                   and self._interp_data.interp_state == EMC_TASK_INTERP_IDLE
+        running = ((self._task_data.task_mode == EMC_TASK_MODE_AUTO
+                    or self._task_data.task_mode == EMC_TASK_MODE_MDI)
+                   and self._interp_data.interp_state == EMC_TASK_INTERP_IDLE)
 
         self.running = running
 
@@ -458,9 +459,9 @@ class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
             return None
 
         if brake == ENGAGE_BRAKE:
-            self.send_emc_spindle_brake_engage()
+            self.send_emc_spindle_brake_engage(self._tx)
         elif brake == RELEASE_BRAKE:
-            self.send_emc_spindle_brake_release()
+            self.send_emc_spindle_brake_release(self._tx)
         return self._take_ticket()
 
     def set_debug_level(self, debug_level):
@@ -515,7 +516,7 @@ class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
             self.send_emc_axis_abort(self._tx)
         elif jog_type == JOG_CONTINUOUS:
             params.velocity = velocity
-            self.send_send_emc_axis_jog(self._tx)
+            self.send_emc_axis_jog(self._tx)
         elif jog_type == JOG_INCREMENT:
             params.velocity = velocity
             params.distance = distance
@@ -591,7 +592,7 @@ class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
         params = self._tx.emc_command_params
         params.enable = enable
 
-        self.send_emc_task_plan_block_delete(self._tx)
+        self.send_emc_task_plan_set_block_delete(self._tx)
         return self._take_ticket()
 
     def set_digital_output(self, index, enable):
@@ -786,7 +787,7 @@ class ApplicationError(ComponentBase, ErrorBase, ServiceContainer):
         self.on_connected_changed = []
 
         self.connected = False
-        self.channels = set(['error', 'text', 'display'])
+        self.channels = {'error', 'text', 'display'}
         self.error_list = []
 
         self._error_service = Service(type_='error')
@@ -1069,7 +1070,7 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             if not self.ready or self.transfer_state != 'NoTransfer':
                 return
 
-        thread = threading.Thread(target=self._remove_file_worker, args=(name, ))
+        thread = threading.Thread(target=self._remove_file_worker, args=(name,))
         thread.start()
 
     def abort(self):

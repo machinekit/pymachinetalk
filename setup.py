@@ -1,6 +1,6 @@
 #!/usr/bin/env python
+# coding=utf-8
 
-from distutils.core import setup
 import sys
 
 # We must use setuptools, not distutils, because we need to use the
@@ -27,9 +27,9 @@ if sys.version_info[0] == 3:
 else:
     # Python 2
     from distutils.command.build_py import build_py as build_py
-from distutils.spawn import find_executable
 
 requirements = ['pyzmq',
+                'protobuf',
                 'machinetalk-protobuf',
                 'fysom',
                 'six']
