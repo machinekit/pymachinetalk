@@ -2,11 +2,11 @@
 import threading
 
 from machinetalk.protobuf.message_pb2 import Container
-from pymachinetalk.application import ENGAGE_BRAKE, RELEASE_BRAKE, JOG_STOP, JOG_CONTINUOUS, JOG_INCREMENT, \
+from .constants import ENGAGE_BRAKE, RELEASE_BRAKE, JOG_STOP, JOG_CONTINUOUS, JOG_INCREMENT, \
     SPINDLE_FORWARD, SPINDLE_REVERSE, SPINDLE_OFF, SPINDLE_INCREASE, SPINDLE_DECREASE, SPINDLE_CONSTANT
-from pymachinetalk.common import ComponentBase
-from pymachinetalk.dns_sd import ServiceContainer, Service
-from pymachinetalk.machinetalk_core.application.commandbase import CommandBase
+from ..common import ComponentBase
+from ..dns_sd import ServiceContainer, Service
+from ..machinetalk_core.application.commandbase import CommandBase
 
 
 class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):

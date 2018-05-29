@@ -1,9 +1,9 @@
 # coding=utf-8
 import threading
 
-from pymachinetalk.common import ComponentBase
-from pymachinetalk.dns_sd import ServiceContainer, Service
-from pymachinetalk.machinetalk_core.application.errorbase import ErrorBase
+from ..common import ComponentBase
+from ..dns_sd import ServiceContainer, Service
+from ..machinetalk_core.application.errorbase import ErrorBase
 
 
 class ApplicationError(ComponentBase, ErrorBase, ServiceContainer):

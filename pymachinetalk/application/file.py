@@ -4,8 +4,8 @@ import os
 import threading
 from six.moves.urllib.parse import urlparse
 
-from pymachinetalk.common import ComponentBase
-from pymachinetalk.dns_sd import ServiceContainer, Service
+from ..common import ComponentBase
+from ..dns_sd import ServiceContainer, Service
 
 
 class ApplicationFile(ComponentBase, ServiceContainer):

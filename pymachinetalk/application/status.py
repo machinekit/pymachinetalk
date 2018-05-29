@@ -3,9 +3,9 @@ import threading
 
 from machinetalk.protobuf.message_pb2 import Container
 from machinetalk.protobuf.status_pb2 import EMC_TASK_MODE_AUTO, EMC_TASK_MODE_MDI, EMC_TASK_INTERP_IDLE
-from pymachinetalk.common import ComponentBase, MessageObject, recurse_descriptor, recurse_message
-from pymachinetalk.dns_sd import ServiceContainer, Service
-from pymachinetalk.machinetalk_core.application.statusbase import StatusBase
+from ..common import ComponentBase, MessageObject, recurse_descriptor, recurse_message
+from ..dns_sd import ServiceContainer, Service
+from ..machinetalk_core.application.statusbase import StatusBase
 
 
 class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
