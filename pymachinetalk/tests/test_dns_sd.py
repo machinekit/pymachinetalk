@@ -123,7 +123,7 @@ class ServiceInfoFactory(object):
         return ServiceInfo(type_=typestring,
                            name='%s %s.%s' % (name, host, typestring),
                            properties=properties,
-                           address=address or host,
+                           address=(address or host).encode(),
                            port=port,
                            server=server)
 

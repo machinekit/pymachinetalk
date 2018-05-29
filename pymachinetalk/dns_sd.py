@@ -81,9 +81,9 @@ class Service(object):
         self.version = info.properties.get(b'version', b'')
         self.host_name = info.server
         try:
-            self.host_address = str(socket.inet_ntoa(info.address))
+            self.host_address = socket.inet_ntoa(info.address).decode()
         except (OSError, socket.error):
-            self.host_address = str(info.address)
+            self.host_address = info.address.decode()
         self._update_uri()
 
     def _update_uri(self):
