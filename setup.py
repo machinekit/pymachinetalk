@@ -32,7 +32,8 @@ requirements = ['pyzmq',
                 'protobuf',
                 'machinetalk-protobuf',
                 'fysom',
-                'six']
+                'six',
+                'zeroconf']
 if sys.version_info <= (3, 3):
     requirements.append('zeroconf<=0.19.1')  # freeze version
 else:
