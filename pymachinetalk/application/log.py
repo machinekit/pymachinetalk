@@ -25,11 +25,10 @@ class ApplicationLog(ComponentBase, LogBase, ServiceContainer):
 
         # callbacks
         self.on_connected_changed = []
-        self.on_log_message_received = []
+        self.on_message_received = []
 
         self.connected = False
         self.log_level = RTAPI_MSG_ALL
-        self.channels = {'motion', 'config', 'task', 'io', 'interp'}
 
         self._log_service = Service(type_='log')
         self.add_service(self._log_service)
@@ -38,8 +37,7 @@ class ApplicationLog(ComponentBase, LogBase, ServiceContainer):
     # slot
     def update_topics(self):
         self.clear_log_topics()
-        for channel in self.channels:
-            self.add_log_topic(channel)
+        self.add_log_topic('log')
 
     # slot
     def set_connected(self):
@@ -51,7 +49,8 @@ class ApplicationLog(ComponentBase, LogBase, ServiceContainer):
 
     # slot
     def log_message_received(self, identity, rx):
-        log_message = rx.log_message()
+        log_message = rx.log_message
+        print('received {}'.format(log_message))
         if log_message.level > self.log_level:
             return
 
@@ -61,9 +60,9 @@ class ApplicationLog(ComponentBase, LogBase, ServiceContainer):
             pid=log_message.pid,
             tag=log_message.tag,
             text=log_message.text,
-            timestamp=self._convert_timestamp(log_message.tv_sec, log_message.tv_nsec)
+            timestamp=self._convert_timestamp(rx.tv_sec, rx.tv_nsec)
         )
-        for cb in self.on_log_message_received:
+        for cb in self.on_message_received:
             cb(msg)
 
     @staticmethod
