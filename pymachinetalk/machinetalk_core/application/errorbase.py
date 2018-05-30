@@ -1,6 +1,4 @@
-import zmq
-import threading
-import uuid
+# coding=utf-8
 from fysom import Fysom
 from ..application.errorsubscribe import ErrorSubscribe
 
@@ -28,14 +26,16 @@ class ErrorBase(object):
         self.on_state_changed = []
 
         # fsm
-        self._fsm = Fysom({'initial': 'down',
-                          'events': [
-                            {'name': 'connect', 'src': 'down', 'dst': 'trying'},
-                            {'name': 'error_up', 'src': 'trying', 'dst': 'up'},
-                            {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
-                            {'name': 'error_trying', 'src': 'up', 'dst': 'trying'},
-                            {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
-                          ]})
+        self._fsm = Fysom(
+            {'initial': 'down',
+             'events': [
+                 {'name': 'connect', 'src': 'down', 'dst': 'trying'},
+                 {'name': 'error_up', 'src': 'trying', 'dst': 'up'},
+                 {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
+                 {'name': 'error_trying', 'src': 'up', 'dst': 'trying'},
+                 {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
+             ]}
+        )
 
         self._fsm.ondown = self._on_fsm_down
         self._fsm.onafterconnect = self._on_fsm_connect
@@ -207,10 +207,10 @@ class ErrorBase(object):
 
     def _error_channel_state_changed(self, state):
 
-        if (state == 'trying'):
+        if state == 'trying':
             if self._fsm.isstate('up'):
                 self._fsm.error_trying()
 
-        elif (state == 'up'):
+        elif state == 'up':
             if self._fsm.isstate('trying'):
                 self._fsm.error_up()

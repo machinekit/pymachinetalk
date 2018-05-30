@@ -1,10 +1,12 @@
+# coding=utf-8
 import threading
 from .dns_sd import ServiceContainer, Service
 from .common import ComponentBase
 
 # protobuf
 from machinetalk.protobuf.message_pb2 import Container
-from machinetalk.protobuf.types_pb2 import HAL_FLOAT, HAL_BIT, HAL_S32, HAL_U32, HAL_IN, HAL_OUT, HAL_IO
+# noinspection PyUnresolvedReferences
+from machinetalk.protobuf.types_pb2 import HAL_FLOAT, HAL_BIT, HAL_S32, HAL_U32, HAL_IN, HAL_IO, HAL_OUT
 from .machinetalk_core.halremote.remotecomponentbase import RemoteComponentBase
 
 
@@ -196,7 +198,8 @@ class RemoteComponent(ComponentBase, RemoteComponentBase, ServiceContainer):
     def getpin(self, name):
         return self.pinsbyname[name]
 
-    def pin_update(self, rpin, lpin):
+    @staticmethod
+    def pin_update(rpin, lpin):
         if rpin.HasField('halfloat'):
             lpin.value = float(rpin.halfloat)
             lpin.synced = True

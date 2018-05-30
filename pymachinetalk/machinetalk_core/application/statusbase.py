@@ -1,6 +1,4 @@
-import zmq
-import threading
-import uuid
+# coding=utf-8
 from fysom import Fysom
 from ..application.statussubscribe import StatusSubscribe
 
@@ -28,17 +26,19 @@ class StatusBase(object):
         self.on_state_changed = []
 
         # fsm
-        self._fsm = Fysom({'initial': 'down',
-                          'events': [
-                            {'name': 'connect', 'src': 'down', 'dst': 'trying'},
-                            {'name': 'status_up', 'src': 'trying', 'dst': 'syncing'},
-                            {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
-                            {'name': 'channels_synced', 'src': 'syncing', 'dst': 'up'},
-                            {'name': 'status_trying', 'src': 'syncing', 'dst': 'trying'},
-                            {'name': 'disconnect', 'src': 'syncing', 'dst': 'down'},
-                            {'name': 'status_trying', 'src': 'up', 'dst': 'trying'},
-                            {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
-                          ]})
+        self._fsm = Fysom(
+            {'initial': 'down',
+             'events': [
+                 {'name': 'connect', 'src': 'down', 'dst': 'trying'},
+                 {'name': 'status_up', 'src': 'trying', 'dst': 'syncing'},
+                 {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
+                 {'name': 'channels_synced', 'src': 'syncing', 'dst': 'up'},
+                 {'name': 'status_trying', 'src': 'syncing', 'dst': 'trying'},
+                 {'name': 'disconnect', 'src': 'syncing', 'dst': 'down'},
+                 {'name': 'status_trying', 'src': 'up', 'dst': 'trying'},
+                 {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
+             ]}
+        )
 
         self._fsm.ondown = self._on_fsm_down
         self._fsm.onafterconnect = self._on_fsm_connect
@@ -200,14 +200,14 @@ class StatusBase(object):
 
     def _status_channel_state_changed(self, state):
 
-        if (state == 'trying'):
+        if state == 'trying':
             if self._fsm.isstate('up'):
                 self._fsm.status_trying()
 
-        elif (state == 'trying'):
+        elif state == 'trying':
             if self._fsm.isstate('syncing'):
                 self._fsm.status_trying()
 
-        elif (state == 'up'):
+        elif state == 'up':
             if self._fsm.isstate('trying'):
                 self._fsm.status_up()

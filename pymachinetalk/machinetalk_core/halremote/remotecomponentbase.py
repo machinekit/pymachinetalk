@@ -1,6 +1,4 @@
-import zmq
-import threading
-import uuid
+# coding=utf-8
 from fysom import Fysom
 from ..common.rpcclient import RpcClient
 from ..halremote.halrcompsubscribe import HalrcompSubscribe
@@ -39,29 +37,31 @@ class RemoteComponentBase(object):
         self.on_state_changed = []
 
         # fsm
-        self._fsm = Fysom({'initial': 'down',
-                          'events': [
-                            {'name': 'connect', 'src': 'down', 'dst': 'trying'},
-                            {'name': 'halrcmd_up', 'src': 'trying', 'dst': 'bind'},
-                            {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
-                            {'name': 'halrcomp_bind_msg_sent', 'src': 'bind', 'dst': 'binding'},
-                            {'name': 'no_bind', 'src': 'bind', 'dst': 'syncing'},
-                            {'name': 'bind_confirmed', 'src': 'binding', 'dst': 'syncing'},
-                            {'name': 'bind_rejected', 'src': 'binding', 'dst': 'error'},
-                            {'name': 'halrcmd_trying', 'src': 'binding', 'dst': 'trying'},
-                            {'name': 'disconnect', 'src': 'binding', 'dst': 'down'},
-                            {'name': 'halrcmd_trying', 'src': 'syncing', 'dst': 'trying'},
-                            {'name': 'halrcomp_up', 'src': 'syncing', 'dst': 'sync'},
-                            {'name': 'sync_failed', 'src': 'syncing', 'dst': 'error'},
-                            {'name': 'disconnect', 'src': 'syncing', 'dst': 'down'},
-                            {'name': 'pins_synced', 'src': 'sync', 'dst': 'synced'},
-                            {'name': 'halrcomp_trying', 'src': 'synced', 'dst': 'syncing'},
-                            {'name': 'halrcmd_trying', 'src': 'synced', 'dst': 'trying'},
-                            {'name': 'set_rejected', 'src': 'synced', 'dst': 'error'},
-                            {'name': 'halrcomp_set_msg_sent', 'src': 'synced', 'dst': 'synced'},
-                            {'name': 'disconnect', 'src': 'synced', 'dst': 'down'},
-                            {'name': 'disconnect', 'src': 'error', 'dst': 'down'},
-                          ]})
+        self._fsm = Fysom(
+            {'initial': 'down',
+             'events': [
+                 {'name': 'connect', 'src': 'down', 'dst': 'trying'},
+                 {'name': 'halrcmd_up', 'src': 'trying', 'dst': 'bind'},
+                 {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
+                 {'name': 'halrcomp_bind_msg_sent', 'src': 'bind', 'dst': 'binding'},
+                 {'name': 'no_bind', 'src': 'bind', 'dst': 'syncing'},
+                 {'name': 'bind_confirmed', 'src': 'binding', 'dst': 'syncing'},
+                 {'name': 'bind_rejected', 'src': 'binding', 'dst': 'error'},
+                 {'name': 'halrcmd_trying', 'src': 'binding', 'dst': 'trying'},
+                 {'name': 'disconnect', 'src': 'binding', 'dst': 'down'},
+                 {'name': 'halrcmd_trying', 'src': 'syncing', 'dst': 'trying'},
+                 {'name': 'halrcomp_up', 'src': 'syncing', 'dst': 'sync'},
+                 {'name': 'sync_failed', 'src': 'syncing', 'dst': 'error'},
+                 {'name': 'disconnect', 'src': 'syncing', 'dst': 'down'},
+                 {'name': 'pins_synced', 'src': 'sync', 'dst': 'synced'},
+                 {'name': 'halrcomp_trying', 'src': 'synced', 'dst': 'syncing'},
+                 {'name': 'halrcmd_trying', 'src': 'synced', 'dst': 'trying'},
+                 {'name': 'set_rejected', 'src': 'synced', 'dst': 'error'},
+                 {'name': 'halrcomp_set_msg_sent', 'src': 'synced', 'dst': 'synced'},
+                 {'name': 'disconnect', 'src': 'synced', 'dst': 'down'},
+                 {'name': 'disconnect', 'src': 'error', 'dst': 'down'},
+             ]}
+        )
 
         self._fsm.ondown = self._on_fsm_down
         self._fsm.onafterconnect = self._on_fsm_connect
@@ -436,7 +436,7 @@ class RemoteComponentBase(object):
 
     def _halrcmd_channel_state_changed(self, state):
 
-        if (state == 'trying'):
+        if state == 'trying':
             if self._fsm.isstate('syncing'):
                 self._fsm.halrcmd_trying()
             elif self._fsm.isstate('synced'):
@@ -444,16 +444,16 @@ class RemoteComponentBase(object):
             elif self._fsm.isstate('binding'):
                 self._fsm.halrcmd_trying()
 
-        elif (state == 'up'):
+        elif state == 'up':
             if self._fsm.isstate('trying'):
                 self._fsm.halrcmd_up()
 
     def _halrcomp_channel_state_changed(self, state):
 
-        if (state == 'trying'):
+        if state == 'trying':
             if self._fsm.isstate('synced'):
                 self._fsm.halrcomp_trying()
 
-        elif (state == 'up'):
+        elif state == 'up':
             if self._fsm.isstate('syncing'):
                 self._fsm.halrcomp_up()

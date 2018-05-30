@@ -1,3 +1,4 @@
+# coding=utf-8
 from __future__ import unicode_literals
 import socket
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
@@ -53,7 +54,7 @@ class Service(object):
         self.service_infos.append(info)
         self._update()
 
-    def remove_service_info(self, info):
+    def remove_service_info(self, _):
         for info in self.service_infos:
             if self == info:
                 self.service_infos.remove(info)
@@ -80,9 +81,9 @@ class Service(object):
         self.version = info.properties.get(b'version', b'')
         self.host_name = info.server
         try:
-            self.host_address = str(socket.inet_ntoa(info.address))
-        except Exception:
-            self.host_address = str(info.address)
+            self.host_address = socket.inet_ntoa(info.address).decode()
+        except (OSError, socket.error):
+            self.host_address = info.address.decode()
         self._update_uri()
 
     def _update_uri(self):
@@ -107,7 +108,9 @@ class Service(object):
 
 
 class ServiceDiscoveryFilter(object):
-    def __init__(self, name='', txt_records={}):
+    def __init__(self, name='', txt_records=None):
+        if txt_records is None:
+            txt_records = {}
         self.name = name
         self.txt_records = txt_records
 
@@ -126,13 +129,15 @@ class ServiceDiscoveryFilter(object):
 
 class ServiceDiscovery(object):
     def __init__(self, service_type='machinekit', filter_=ServiceDiscoveryFilter(),
-                 nameservers=[], lookup_interval=None):
+                 nameservers=None, lookup_interval=None):
         """ Initialize the multicast or unicast DNS-SD service discovery instance.
         @param service_type DNS-SD type use for discovery, does not need to be changed for Machinekit.
-        @param filter Optional filter can be used to look for specific instances.
+        @param filter_ Optional filter can be used to look for specific instances.
         @param nameservers Pass one or more nameserver addresses to enabled unicast service discovery.
         @param lookup_interval How often the SD should send out service queries.
         """
+        if nameservers is None:
+            nameservers = []
         self.service_type = service_type
         self.filter = filter_
         self.nameservers = nameservers
@@ -195,7 +200,8 @@ class ServiceDiscovery(object):
             if self.filter.matches_service_info(info) and service.matches_service_info(info):
                 service.add_service_info(info)
 
-    def _verify_item_and_run(self, item, cmd):
+    @staticmethod
+    def _verify_item_and_run(item, cmd):
         if isinstance(item, ServiceContainer):
             for service in item.services:
                 cmd(service)

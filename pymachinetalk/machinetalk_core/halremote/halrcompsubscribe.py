@@ -1,6 +1,8 @@
+# coding=utf-8
 import zmq
 import threading
 import uuid
+from google.protobuf.message import DecodeError
 from fysom import Fysom
 
 import machinetalk.protobuf.types_pb2 as pb
@@ -43,16 +45,18 @@ class HalrcompSubscribe(object):
         self.on_state_changed = []
 
         # fsm
-        self._fsm = Fysom({'initial': 'down',
-                          'events': [
-                            {'name': 'start', 'src': 'down', 'dst': 'trying'},
-                            {'name': 'full_update_received', 'src': 'trying', 'dst': 'up'},
-                            {'name': 'stop', 'src': 'trying', 'dst': 'down'},
-                            {'name': 'heartbeat_timeout', 'src': 'up', 'dst': 'trying'},
-                            {'name': 'heartbeat_tick', 'src': 'up', 'dst': 'up'},
-                            {'name': 'any_msg_received', 'src': 'up', 'dst': 'up'},
-                            {'name': 'stop', 'src': 'up', 'dst': 'down'},
-                          ]})
+        self._fsm = Fysom(
+            {'initial': 'down',
+             'events': [
+                 {'name': 'start', 'src': 'down', 'dst': 'trying'},
+                 {'name': 'full_update_received', 'src': 'trying', 'dst': 'up'},
+                 {'name': 'stop', 'src': 'trying', 'dst': 'down'},
+                 {'name': 'heartbeat_timeout', 'src': 'up', 'dst': 'trying'},
+                 {'name': 'heartbeat_tick', 'src': 'up', 'dst': 'up'},
+                 {'name': 'any_msg_received', 'src': 'up', 'dst': 'up'},
+                 {'name': 'stop', 'src': 'up', 'dst': 'down'},
+             ]}
+        )
 
         self._fsm.ondown = self._on_fsm_down
         self._fsm.onafterstart = self._on_fsm_start
@@ -217,8 +221,10 @@ class HalrcompSubscribe(object):
             self._heartbeat_timer = None
 
         if self._heartbeat_interval > 0:
-            self._heartbeat_timer = threading.Timer(self._heartbeat_interval / 1000.0,
-                                                 self._heartbeat_timer_tick)
+            self._heartbeat_timer = threading.Timer(
+                self._heartbeat_interval / 1000.0,
+                self._heartbeat_timer_tick
+            )
             self._heartbeat_timer.start()
         self._heartbeat_lock.release()
         if self.debuglevel > 0:
@@ -250,7 +256,7 @@ class HalrcompSubscribe(object):
         if self.debuglevel > 0:
             print('[%s] received message' % self.debugname)
             if self.debuglevel > 1:
-                print(self.socket_rx)
+                print(self._socket_rx)
         rx = self._socket_rx
 
         # react to any incoming message

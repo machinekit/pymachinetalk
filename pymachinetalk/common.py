@@ -1,7 +1,8 @@
+# coding=utf-8
 import sys
 
 
-class MessageObject():
+class MessageObject(object):
     def __init__(self):
         self.is_position = False
         self.id_map = {}
@@ -27,12 +28,12 @@ def recurse_descriptor(descriptor, obj):
         if field.type == field.TYPE_BOOL:
             value = False
         elif field.type == field.TYPE_DOUBLE \
-        or field.type == field.TYPE_FLOAT:
+                or field.type == field.TYPE_FLOAT:
             value = 0.0
         elif field.type == field.TYPE_INT32 \
-        or field.type == field.TYPE_INT64 \
-        or field.type == field.TYPE_UINT32 \
-        or field.type == field.TYPE_UINT64:
+                or field.type == field.TYPE_INT64 \
+                or field.type == field.TYPE_UINT32 \
+                or field.type == field.TYPE_UINT64:
             value = 0
         elif field.type == field.TYPE_STRING:
             value = ''
@@ -86,7 +87,6 @@ def recurse_message(message, obj, field_filter=''):
                     while len(array) < (index + 1):
                         array.append(MessageObject())
 
-                    value = None
                     if len(sub_message.DESCRIPTOR.fields) == 2:
                         sub_obj = MessageObject()
                         recurse_descriptor(sub_message.DESCRIPTOR, sub_obj)
@@ -100,6 +100,7 @@ def recurse_message(message, obj, field_filter=''):
                     array[index] = value
 
 
+# noinspection PyUnresolvedReferences
 class ComponentBase(object):
     def __init__(self):
         self._ready = False
