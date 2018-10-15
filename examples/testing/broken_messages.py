@@ -22,7 +22,9 @@ class TestClass(object):
         for name in services:
             service = Service(type_=name)
             self.sd.register(service)
-            service.on_ready_changed.append(partial(self.service_ready, service=service))
+            service.on_ready_changed.append(
+                partial(self.service_ready, service=service)
+            )
 
         self._tx = Container()
         self._rx = Container()
@@ -58,7 +60,7 @@ class TestClass(object):
         self._rx.ParseFromString(answer)
         if self.debug:
             print('received answer %s' % self._rx)
-        if (self._rx.type == MT_ERROR):
+        if self._rx.type == MT_ERROR:
             print('test successfull, %s handles broken messages' % name)
         else:
             print('test failed, %s does not handle broken messages' % name)
@@ -104,13 +106,16 @@ class TestClass(object):
         self._rx.ParseFromString(recv)
         if self.debug:
             print(self._rx)
-        if (self._rx.type == MT_PING_ACKNOWLEDGE):
+        if self._rx.type == MT_PING_ACKNOWLEDGE:
             print('test successfull, %s handles multiple ids' % name)
         else:
             print('test failed, %s does not correctly handle multiple ids' % name)
 
+
 def main():
-    parser = argparse.ArgumentParser(description='tests Machinetalk RPC sockets behavior on broken messages and multiple ids')
+    parser = argparse.ArgumentParser(
+        description='tests Machinetalk RPC sockets behavior on broken messages and multiple ids'
+    )
     parser.add_argument('-d', '--debug', help='Enable debug mode', action='store_true')
     args = parser.parse_args()
 
@@ -134,6 +139,7 @@ def main():
 
     print("threads stopped")
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

@@ -50,20 +50,22 @@ class RpcClient(object):
 
         # fsm
         self._fsm = Fysom(
-            {'initial': 'down',
-             'events': [
-                 {'name': 'start', 'src': 'down', 'dst': 'trying'},
-                 {'name': 'any_msg_received', 'src': 'trying', 'dst': 'up'},
-                 {'name': 'heartbeat_timeout', 'src': 'trying', 'dst': 'trying'},
-                 {'name': 'heartbeat_tick', 'src': 'trying', 'dst': 'trying'},
-                 {'name': 'any_msg_sent', 'src': 'trying', 'dst': 'trying'},
-                 {'name': 'stop', 'src': 'trying', 'dst': 'down'},
-                 {'name': 'heartbeat_timeout', 'src': 'up', 'dst': 'trying'},
-                 {'name': 'heartbeat_tick', 'src': 'up', 'dst': 'up'},
-                 {'name': 'any_msg_received', 'src': 'up', 'dst': 'up'},
-                 {'name': 'any_msg_sent', 'src': 'up', 'dst': 'up'},
-                 {'name': 'stop', 'src': 'up', 'dst': 'down'},
-             ]}
+            {
+                'initial': 'down',
+                'events': [
+                    {'name': 'start', 'src': 'down', 'dst': 'trying'},
+                    {'name': 'any_msg_received', 'src': 'trying', 'dst': 'up'},
+                    {'name': 'heartbeat_timeout', 'src': 'trying', 'dst': 'trying'},
+                    {'name': 'heartbeat_tick', 'src': 'trying', 'dst': 'trying'},
+                    {'name': 'any_msg_sent', 'src': 'trying', 'dst': 'trying'},
+                    {'name': 'stop', 'src': 'trying', 'dst': 'down'},
+                    {'name': 'heartbeat_timeout', 'src': 'up', 'dst': 'trying'},
+                    {'name': 'heartbeat_tick', 'src': 'up', 'dst': 'up'},
+                    {'name': 'any_msg_received', 'src': 'up', 'dst': 'up'},
+                    {'name': 'any_msg_sent', 'src': 'up', 'dst': 'up'},
+                    {'name': 'stop', 'src': 'up', 'dst': 'down'},
+                ],
+            }
         )
 
         self._fsm.ondown = self._on_fsm_down
@@ -188,8 +190,9 @@ class RpcClient(object):
                 self._socket_message_received(socket)
 
     def start_socket(self):
-        self._thread = threading.Thread(target=self._socket_worker,
-                                        args=(self._context, self.socket_uri,))
+        self._thread = threading.Thread(
+            target=self._socket_worker, args=(self._context, self.socket_uri)
+        )
         self._thread.start()
 
     def stop_socket(self):
@@ -230,8 +233,7 @@ class RpcClient(object):
 
         if self._heartbeat_interval > 0:
             self._heartbeat_timer = threading.Timer(
-                self._heartbeat_interval / 1000.0,
-                self._heartbeat_timer_tick
+                self._heartbeat_interval / 1000.0, self._heartbeat_timer_tick
             )
             self._heartbeat_timer.start()
         self._heartbeat_lock.release()
@@ -275,7 +277,7 @@ class RpcClient(object):
 
         # react to ping acknowledge message
         if rx.type == pb.MT_PING_ACKNOWLEDGE:
-            return   # ping acknowledge is uninteresting
+            return  # ping acknowledge is uninteresting
 
         for cb in self.on_socket_message_received:
             cb(rx)

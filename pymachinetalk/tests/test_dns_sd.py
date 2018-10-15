@@ -5,12 +5,14 @@ import pytest
 @pytest.fixture
 def dns_sd():
     from pymachinetalk import dns_sd
+
     return dns_sd
 
 
 @pytest.fixture
 def sd():
     from pymachinetalk import dns_sd
+
     sd = dns_sd.ServiceDiscovery()
     return sd
 
@@ -49,6 +51,7 @@ def test_registeringWhenRunningThrowsError(dns_sd, sd):
 
     def dummy():
         pass
+
     sd._start_discovery = dummy
     sd.start()
 
@@ -96,6 +99,7 @@ def test_unregisteringWhenRunningThrowsError(dns_sd, sd):
 
     def dummy():
         pass
+
     sd._start_discovery = dummy
     sd.start()
 
@@ -108,29 +112,47 @@ def test_unregisteringWhenRunningThrowsError(dns_sd, sd):
 
 
 class ServiceInfoFactory(object):
-    def create(self, base_type='machinekit', domain='local', sd_protocol='tcp',
-               name='Hugo on Franz', service=b'halrcomp', uuid=b'12345678',
-               host='127.0.0.1', protocol='tcp', port=12345,
-               version=0, properties=None, server='127.0.0.1', address=None):
+    def create(
+        self,
+        base_type='machinekit',
+        domain='local',
+        sd_protocol='tcp',
+        name='Hugo on Franz',
+        service=b'halrcomp',
+        uuid=b'12345678',
+        host='127.0.0.1',
+        protocol='tcp',
+        port=12345,
+        version=0,
+        properties=None,
+        server='127.0.0.1',
+        address=None,
+    ):
         from zeroconf import ServiceInfo
+
         typestring = '_%s._%s.%s.' % (base_type, sd_protocol, domain)
         dsn = b'%s://%s:%i' % (protocol.encode(), host.encode(), port)
         if properties is None:
-            properties = {b'uuid': uuid,
-                          b'service': service,
-                          b'dsn': dsn,
-                          b'version': version}
-        return ServiceInfo(type_=typestring,
-                           name='%s %s.%s' % (name, host, typestring),
-                           properties=properties,
-                           address=(address or host).encode(),
-                           port=port,
-                           server=server)
+            properties = {
+                b'uuid': uuid,
+                b'service': service,
+                b'dsn': dsn,
+                b'version': version,
+            }
+        return ServiceInfo(
+            type_=typestring,
+            name='%s %s.%s' % (name, host, typestring),
+            properties=properties,
+            address=(address or host).encode(),
+            port=port,
+            server=server,
+        )
 
 
 @pytest.fixture
 def zeroconf(mocker):
     from zeroconf import Zeroconf
+
     service_info = ServiceInfoFactory().create()
     zeroconf_stub = mocker.stub(name='get_service_info')
     zeroconf_stub.return_value = service_info
@@ -142,6 +164,7 @@ def zeroconf(mocker):
 @pytest.fixture
 def zeroconf_without_service_info(mocker):
     from zeroconf import Zeroconf
+
     zeroconf_stub = mocker.stub(name='get_service_info')
     zeroconf_stub.return_value = None
     stub_object = Zeroconf()
@@ -153,7 +176,11 @@ def test_serviceDiscoveredUpdatesRegisteredServices(dns_sd, sd, zeroconf):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
 
-    sd.add_service(zeroconf, '_machinekit._tcp.local.', 'Foo on Bar 127.0.0.1._machinekit._tcp.local.')
+    sd.add_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
+    )
 
     assert service.ready is True
 
@@ -162,8 +189,16 @@ def test_serviceDisappearedUpdatesRegisteredServices(dns_sd, sd, zeroconf):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
 
-    sd.add_service(zeroconf, '_machinekit._tcp.local.', 'Foo on Bar 127.0.0.1._machinekit._tcp.local.')
-    sd.remove_service(zeroconf, '_machinekit._tcp.local.', 'Foo on Bar 127.0.0.1._machinekit._tcp.local.')
+    sd.add_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
+    )
+    sd.remove_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
+    )
 
     assert service.ready is False
 
@@ -174,7 +209,11 @@ def test_stoppingServiceDiscoveryResetsAllServices(dns_sd, sd, zeroconf):
     service2 = dns_sd.Service(type_='halrcmd')
     sd.register(service2)
     sd.browser = object()  # dummy
-    sd.add_service(zeroconf, '_machinekit._tcp.local.', 'Foo on Bar 127.0.0.1._machinekit._tcp.local.')
+    sd.add_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
+    )
 
     sd.stop()
 
@@ -182,21 +221,33 @@ def test_stoppingServiceDiscoveryResetsAllServices(dns_sd, sd, zeroconf):
     assert service2.ready is False
 
 
-def test_serviceDiscoveredWithoutServiceInfoDoesNotUpdateRegisteredServices(dns_sd, sd, zeroconf_without_service_info):
+def test_serviceDiscoveredWithoutServiceInfoDoesNotUpdateRegisteredServices(
+    dns_sd, sd, zeroconf_without_service_info
+):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
 
-    sd.add_service(zeroconf_without_service_info, '_machinekit._tcp.local.', 'Foo on Bar 127.0.0.1._machinekit._tcp.local.')
+    sd.add_service(
+        zeroconf_without_service_info,
+        '_machinekit._tcp.local.',
+        'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
+    )
 
     assert service.ready is False
 
 
-def test_serviceDisappearedWithoutServiceInfoDoesNotUpdateRegisteredServices(dns_sd, sd, zeroconf_without_service_info):
+def test_serviceDisappearedWithoutServiceInfoDoesNotUpdateRegisteredServices(
+    dns_sd, sd, zeroconf_without_service_info
+):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
     service.ready = True
 
-    sd.remove_service(zeroconf_without_service_info, '_machinekit._tcp.local.', 'Foo on Bar 127.0.0.1._machinekit._tcp.local.')
+    sd.remove_service(
+        zeroconf_without_service_info,
+        '_machinekit._tcp.local.',
+        'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
+    )
 
     assert service.ready is True
 
@@ -210,7 +261,7 @@ def test_serviceInfoSetsAllRelevantValuesOfService(dns_sd):
         host='10.0.0.10',
         protocol='tcp',
         port=12456,
-        server='sandybox.local'
+        server='sandybox.local',
     )
 
     service.add_service_info(service_info)
@@ -230,7 +281,7 @@ def test_serviceInfoResolvesLocalHostnameIfMatched(dns_sd):
         protocol='tcp',
         port=12456,
         server='sandybox.local',
-        address='10.0.0.10'
+        address='10.0.0.10',
     )
 
     service.add_service_info(service_info)
@@ -245,7 +296,7 @@ def test_serviceInfoRetursRawUriIfHostnameIsNotMatched(dns_sd):
         protocol='tcp',
         port=12456,
         server='sandybox.local',
-        address='10.0.0.10'
+        address='10.0.0.10',
     )
 
     service.add_service_info(service_info)
@@ -295,6 +346,7 @@ def test_settingReadyPropertyOfServiceTriggersCallback(dns_sd):
 
     def cb(_):
         cb_called[0] = True
+
     service = dns_sd.Service(type_='halrcomp')
     service.on_ready_changed.append(cb)
     service_info = ServiceInfoFactory().create()
@@ -381,6 +433,7 @@ def test_discoverableServicesReadyChangedCallsCallback(dns_sd):
 
     def cb(_):
         cb_called[0] = True
+
     discoverable = dns_sd.ServiceContainer()
     discoverable.on_services_ready_changed.append(cb)
 
@@ -439,25 +492,45 @@ def test_serviceDiscoveryFiltersOutDiscoveredServiceWithWrongUuid(dns_sd, sd, ze
     sd.register(service)
     sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'87654321'})
 
-    sd.add_service(zeroconf, '_machinekit._tcp.local.', 'Machinekit on MyBox 12.0.0.1._machinekit._tcp.local.')
+    sd.add_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'Machinekit on MyBox 12.0.0.1._machinekit._tcp.local.',
+    )
 
     assert service.ready is False
 
 
-def test_serviceDiscoveryFiltersInDiscoveredServiceWithCorrectUuid(dns_sd, sd, zeroconf):
+def test_serviceDiscoveryFiltersInDiscoveredServiceWithCorrectUuid(
+    dns_sd, sd, zeroconf
+):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
     sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'12345678'})
 
-    sd.add_service(zeroconf, '_machinekit._tcp.local.', 'SuperPrint 192.168.7.2._machinekit._tcp.local.')
+    sd.add_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'SuperPrint 192.168.7.2._machinekit._tcp.local.',
+    )
     assert service.ready is True
 
 
-def test_serviceDiscoveryFiltersInDisappearedServiceWithCorrectUuid(dns_sd, sd, zeroconf):
+def test_serviceDiscoveryFiltersInDisappearedServiceWithCorrectUuid(
+    dns_sd, sd, zeroconf
+):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
     sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'12345678'})
 
-    sd.add_service(zeroconf, '_machinekit._tcp.local.', 'SuperPrint 192.168.7.2._machinekit._tcp.local.')
-    sd.remove_service(zeroconf, '_machinekit._tcp.local.', 'SuperPrint 192.168.7.2._machinekit._tcp.local.')
+    sd.add_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'SuperPrint 192.168.7.2._machinekit._tcp.local.',
+    )
+    sd.remove_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'SuperPrint 192.168.7.2._machinekit._tcp.local.',
+    )
     assert service.ready is False

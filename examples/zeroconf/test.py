@@ -4,7 +4,6 @@ import time
 
 
 class MyListener(object):
-
     def remove_service(self, zeroconf, type, name):
         print("Service %s removed" % (name,))
 

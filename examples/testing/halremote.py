@@ -31,6 +31,7 @@ class BasicClass(threading.Thread):
         sd.stop()
         print('completed')
 
+
 def main():
     basic = BasicClass()
     basic.start()
@@ -41,6 +42,7 @@ def main():
 
     print("threads stopped")
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

@@ -17,7 +17,9 @@ class StatusBase(object):
         self._status_channel = StatusSubscribe(debuglevel=debuglevel)
         self._status_channel.debugname = '%s - %s' % (self.debugname, 'status')
         self._status_channel.on_state_changed.append(self._status_channel_state_changed)
-        self._status_channel.on_socket_message_received.append(self._status_channel_message_received)
+        self._status_channel.on_socket_message_received.append(
+            self._status_channel_message_received
+        )
         # more efficient to reuse protobuf messages
         self._status_rx = Container()
 
@@ -27,17 +29,19 @@ class StatusBase(object):
 
         # fsm
         self._fsm = Fysom(
-            {'initial': 'down',
-             'events': [
-                 {'name': 'connect', 'src': 'down', 'dst': 'trying'},
-                 {'name': 'status_up', 'src': 'trying', 'dst': 'syncing'},
-                 {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
-                 {'name': 'channels_synced', 'src': 'syncing', 'dst': 'up'},
-                 {'name': 'status_trying', 'src': 'syncing', 'dst': 'trying'},
-                 {'name': 'disconnect', 'src': 'syncing', 'dst': 'down'},
-                 {'name': 'status_trying', 'src': 'up', 'dst': 'trying'},
-                 {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
-             ]}
+            {
+                'initial': 'down',
+                'events': [
+                    {'name': 'connect', 'src': 'down', 'dst': 'trying'},
+                    {'name': 'status_up', 'src': 'trying', 'dst': 'syncing'},
+                    {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
+                    {'name': 'channels_synced', 'src': 'syncing', 'dst': 'up'},
+                    {'name': 'status_trying', 'src': 'syncing', 'dst': 'trying'},
+                    {'name': 'disconnect', 'src': 'syncing', 'dst': 'down'},
+                    {'name': 'status_trying', 'src': 'up', 'dst': 'trying'},
+                    {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
+                ],
+            }
         )
 
         self._fsm.ondown = self._on_fsm_down

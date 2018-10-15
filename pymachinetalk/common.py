@@ -27,13 +27,14 @@ def recurse_descriptor(descriptor, obj):
 
         if field.type == field.TYPE_BOOL:
             value = False
-        elif field.type == field.TYPE_DOUBLE \
-                or field.type == field.TYPE_FLOAT:
+        elif field.type == field.TYPE_DOUBLE or field.type == field.TYPE_FLOAT:
             value = 0.0
-        elif field.type == field.TYPE_INT32 \
-                or field.type == field.TYPE_INT64 \
-                or field.type == field.TYPE_UINT32 \
-                or field.type == field.TYPE_UINT64:
+        elif (
+            field.type == field.TYPE_INT32
+            or field.type == field.TYPE_INT64
+            or field.type == field.TYPE_UINT32
+            or field.type == field.TYPE_UINT64
+        ):
             value = 0
         elif field.type == field.TYPE_STRING:
             value = ''

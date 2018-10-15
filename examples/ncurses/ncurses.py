@@ -21,30 +21,31 @@ else:
 
 
 class TerminalUI(object):
-    def __init__(self, uuid, use_curses):
-        sd_filter = ServiceDiscoveryFilter(txt_records={ 'uuid': uuid })
+    def __init__(self, uuid, use_curses, debug=False):
+        sd_filter = ServiceDiscoveryFilter(txt_records={'uuid': uuid})
         self.sd = ServiceDiscovery(filter_=sd_filter)
 
         halrcomp = halremote.component('test')
+        halrcomp.debug = debug
         halrcomp.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp = halrcomp
         self.sd.register(halrcomp)
 
-        halrcomp2 = halremote.RemoteComponent(name='test2', debug=False)
+        halrcomp2 = halremote.RemoteComponent(name='test2', debug=debug)
         halrcomp2.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp2.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp2 = halrcomp2
         self.sd.register(halrcomp2)
 
-        self.status = ApplicationStatus(debug=False)
+        self.status = ApplicationStatus(debug=debug)
         self.status.on_synced_changed.append(self._on_status_synced)
         self.sd.register(self.status)
-        self.command = ApplicationCommand(debug=False)
+        self.command = ApplicationCommand(debug=debug)
         self.sd.register(self.command)
-        self.error = ApplicationError(debug=False)
+        self.error = ApplicationError(debug=debug)
         self.sd.register(self.error)
-        self.fileservice = ApplicationFile(debug=True)
+        self.fileservice = ApplicationFile(debug=debug)
         self.fileservice.local_file_path = 'test.ngc'
         self.fileservice.local_path = './ngc/'
         self.fileservice.remote_path = '/home/xy/'
@@ -91,7 +92,7 @@ class TerminalUI(object):
             self.fileservice.wait_completed()
 
     def status_timer_tick(self):
-        #if self.status.synced:
+        # if self.status.synced:
         # print('flood %s' % self.status.io.flood)
         if self.use_curses:
             self.update_screen()
@@ -107,9 +108,17 @@ class TerminalUI(object):
         con.clear()
         con.border(0)
         con.addstr(1, 2, 'Connection')
-        con.addstr(3, 4, 'Status: %s %s' % (str(self.status.synced), self.status.status_uri))
-        con.addstr(4, 4, 'Command: %s %s' % (str(self.command.connected), self.command.command_uri))
-        con.addstr(5, 4, 'Error: %s %s' % (str(self.error.connected), self.error.error_uri))
+        con.addstr(
+            3, 4, 'Status: %s %s' % (str(self.status.synced), self.status.status_uri)
+        )
+        con.addstr(
+            4,
+            4,
+            'Command: %s %s' % (str(self.command.connected), self.command.command_uri),
+        )
+        con.addstr(
+            5, 4, 'Error: %s %s' % (str(self.error.connected), self.error.error_uri)
+        )
         con.refresh()
 
         if not self.status.synced or not self.command.connected:
@@ -128,8 +137,18 @@ class TerminalUI(object):
         status.clear()
         status.border(0)
         status.addstr(1, 2, 'Status')
-        status.addstr(3, 4, 'Estop: %s' % str(self.status.task.task_state == application.EMC_TASK_STATE_ESTOP))
-        status.addstr(4, 4, 'Power: %s' % str(self.status.task.task_state == application.EMC_TASK_STATE_ON))
+        status.addstr(
+            3,
+            4,
+            'Estop: %s'
+            % str(self.status.task.task_state == application.EMC_TASK_STATE_ESTOP),
+        )
+        status.addstr(
+            4,
+            4,
+            'Power: %s'
+            % str(self.status.task.task_state == application.EMC_TASK_STATE_ON),
+        )
         status.refresh()
 
         cmd = self.command_window
@@ -165,7 +184,9 @@ class TerminalUI(object):
         c = self.screen.getch()
         if c == curses.KEY_F1:
             if self.status.task.task_state == application.EMC_TASK_STATE_ESTOP:
-                ticket = self.command.set_task_state(application.EMC_TASK_STATE_ESTOP_RESET)
+                ticket = self.command.set_task_state(
+                    application.EMC_TASK_STATE_ESTOP_RESET
+                )
                 self.command.wait_completed(ticket=ticket, timeout=0.2)
             else:
                 self.command.set_task_state(application.EMC_TASK_STATE_ESTOP)

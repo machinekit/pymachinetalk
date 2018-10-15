@@ -5,8 +5,17 @@ from .common import ComponentBase
 
 # protobuf
 from machinetalk.protobuf.message_pb2 import Container
+
 # noinspection PyUnresolvedReferences
-from machinetalk.protobuf.types_pb2 import HAL_FLOAT, HAL_BIT, HAL_S32, HAL_U32, HAL_IN, HAL_IO, HAL_OUT
+from machinetalk.protobuf.types_pb2 import (
+    HAL_FLOAT,
+    HAL_BIT,
+    HAL_S32,
+    HAL_U32,
+    HAL_IN,
+    HAL_IO,
+    HAL_OUT,
+)
 from .machinetalk_core.halremote.remotecomponentbase import RemoteComponentBase
 
 

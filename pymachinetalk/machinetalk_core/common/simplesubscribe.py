@@ -9,8 +9,8 @@ import machinetalk.protobuf.types_pb2 as pb
 from machinetalk.protobuf.message_pb2 import Container
 
 
-class Subscribe(object):
-    def __init__(self, debuglevel=0, debugname='Subscribe'):
+class SimpleSubscribe(object):
+    def __init__(self, debuglevel=0, debugname='Simple Subscribe'):
         self.debuglevel = debuglevel
         self.debugname = debugname
         self._error_string = ''
@@ -32,14 +32,6 @@ class Subscribe(object):
         # more efficient to reuse protobuf messages
         self._socket_rx = Container()
 
-        # Heartbeat
-        self._heartbeat_lock = threading.Lock()
-        self._heartbeat_interval = 2500
-        self._heartbeat_timer = None
-        self._heartbeat_active = False
-        self._heartbeat_liveness = 0
-        self._heartbeat_reset_liveness = 5
-
         # callbacks
         self.on_socket_message_received = []
         self.on_state_changed = []
@@ -49,11 +41,7 @@ class Subscribe(object):
             {
                 'initial': 'down',
                 'events': [
-                    {'name': 'start', 'src': 'down', 'dst': 'trying'},
-                    {'name': 'full_update_received', 'src': 'trying', 'dst': 'up'},
-                    {'name': 'stop', 'src': 'trying', 'dst': 'down'},
-                    {'name': 'heartbeat_timeout', 'src': 'up', 'dst': 'trying'},
-                    {'name': 'heartbeat_tick', 'src': 'up', 'dst': 'up'},
+                    {'name': 'start', 'src': 'down', 'dst': 'up'},
                     {'name': 'any_msg_received', 'src': 'up', 'dst': 'up'},
                     {'name': 'stop', 'src': 'up', 'dst': 'down'},
                 ],
@@ -62,13 +50,9 @@ class Subscribe(object):
 
         self._fsm.ondown = self._on_fsm_down
         self._fsm.onafterstart = self._on_fsm_start
-        self._fsm.ontrying = self._on_fsm_trying
-        self._fsm.onafterfull_update_received = self._on_fsm_full_update_received
-        self._fsm.onafterstop = self._on_fsm_stop
         self._fsm.onup = self._on_fsm_up
-        self._fsm.onafterheartbeat_timeout = self._on_fsm_heartbeat_timeout
-        self._fsm.onafterheartbeat_tick = self._on_fsm_heartbeat_tick
         self._fsm.onafterany_msg_received = self._on_fsm_any_msg_received
+        self._fsm.onafterstop = self._on_fsm_stop
 
     def _on_fsm_down(self, _):
         if self.debuglevel > 0:
@@ -83,27 +67,6 @@ class Subscribe(object):
         self.start_socket()
         return True
 
-    def _on_fsm_trying(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: state TRYING' % self.debugname)
-        for cb in self.on_state_changed:
-            cb('trying')
-        return True
-
-    def _on_fsm_full_update_received(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: event FULL UPDATE RECEIVED' % self.debugname)
-        self.reset_heartbeat_liveness()
-        self.start_heartbeat_timer()
-        return True
-
-    def _on_fsm_stop(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: event STOP' % self.debugname)
-        self.stop_heartbeat_timer()
-        self.stop_socket()
-        return True
-
     def _on_fsm_up(self, _):
         if self.debuglevel > 0:
             print('[%s]: state UP' % self.debugname)
@@ -111,25 +74,15 @@ class Subscribe(object):
             cb('up')
         return True
 
-    def _on_fsm_heartbeat_timeout(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: event HEARTBEAT TIMEOUT' % self.debugname)
-        self.stop_heartbeat_timer()
-        self.stop_socket()
-        self.start_socket()
-        return True
-
-    def _on_fsm_heartbeat_tick(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: event HEARTBEAT TICK' % self.debugname)
-        self.reset_heartbeat_timer()
-        return True
-
     def _on_fsm_any_msg_received(self, _):
         if self.debuglevel > 0:
             print('[%s]: event ANY MSG RECEIVED' % self.debugname)
-        self.reset_heartbeat_liveness()
-        self.reset_heartbeat_timer()
+        return True
+
+    def _on_fsm_stop(self, _):
+        if self.debuglevel > 0:
+            print('[%s]: event STOP' % self.debugname)
+        self.stop_socket()
         return True
 
     @property
@@ -149,9 +102,7 @@ class Subscribe(object):
             self._fsm.start()
 
     def stop(self):
-        if self._fsm.isstate('trying'):
-            self._fsm.stop()
-        elif self._fsm.isstate('up'):
+        if self._fsm.isstate('up'):
             self._fsm.stop()
 
     def add_socket_topic(self, name):
@@ -195,55 +146,6 @@ class Subscribe(object):
         self._shutdown.send(b' ')  # trigger socket thread shutdown
         self._thread = None
 
-    def _heartbeat_timer_tick(self):
-        with self._heartbeat_lock:
-            self._heartbeat_timer = None  # timer is dead on tick
-
-        if self.debuglevel > 0:
-            print('[%s] heartbeat timer tick' % self.debugname)
-
-        self._heartbeat_liveness -= 1
-        if self._heartbeat_liveness == 0:
-            if self._fsm.isstate('up'):
-                self._fsm.heartbeat_timeout()
-            return
-
-        if self._fsm.isstate('up'):
-            self._fsm.heartbeat_tick()
-
-    def reset_heartbeat_liveness(self):
-        self._heartbeat_liveness = self._heartbeat_reset_liveness
-
-    def reset_heartbeat_timer(self):
-        if not self._heartbeat_active:
-            return
-
-        self._heartbeat_lock.acquire()
-        if self._heartbeat_timer:
-            self._heartbeat_timer.cancel()
-            self._heartbeat_timer = None
-
-        if self._heartbeat_interval > 0:
-            self._heartbeat_timer = threading.Timer(
-                self._heartbeat_interval / 1000.0, self._heartbeat_timer_tick
-            )
-            self._heartbeat_timer.start()
-        self._heartbeat_lock.release()
-        if self.debuglevel > 0:
-            print('[%s] heartbeat timer reset' % self.debugname)
-
-    def start_heartbeat_timer(self):
-        self._heartbeat_active = True
-        self.reset_heartbeat_timer()
-
-    def stop_heartbeat_timer(self):
-        self._heartbeat_active = False
-        self._heartbeat_lock.acquire()
-        if self._heartbeat_timer:
-            self._heartbeat_timer.cancel()
-            self._heartbeat_timer = None
-        self._heartbeat_lock.release()
-
     # process all messages received on socket
     def _socket_message_received(self, socket):
         (identity, msg) = socket.recv_multipart()  # identity is topic
@@ -264,18 +166,6 @@ class Subscribe(object):
         # react to any incoming message
         if self._fsm.isstate('up'):
             self._fsm.any_msg_received()
-
-        # react to ping message
-        if rx.type == pb.MT_PING:
-            return  # ping is uninteresting
-
-        # react to full update message
-        elif rx.type == pb.MT_FULL_UPDATE:
-            if rx.HasField('pparams'):
-                interval = rx.pparams.keepalive_timer
-                self._heartbeat_interval = interval
-            if self._fsm.isstate('trying'):
-                self._fsm.full_update_received()
 
         for cb in self.on_socket_message_received:
             cb(identity, rx)

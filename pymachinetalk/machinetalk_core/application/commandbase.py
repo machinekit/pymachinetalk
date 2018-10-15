@@ -16,8 +16,12 @@ class CommandBase(object):
         # Command
         self._command_channel = RpcClient(debuglevel=debuglevel)
         self._command_channel.debugname = '%s - %s' % (self.debugname, 'command')
-        self._command_channel.on_state_changed.append(self._command_channel_state_changed)
-        self._command_channel.on_socket_message_received.append(self._command_channel_message_received)
+        self._command_channel.on_state_changed.append(
+            self._command_channel_state_changed
+        )
+        self._command_channel.on_socket_message_received.append(
+            self._command_channel_message_received
+        )
         # more efficient to reuse protobuf messages
         self._command_rx = Container()
         self._command_tx = Container()
@@ -28,14 +32,16 @@ class CommandBase(object):
 
         # fsm
         self._fsm = Fysom(
-            {'initial': 'down',
-             'events': [
-                 {'name': 'connect', 'src': 'down', 'dst': 'trying'},
-                 {'name': 'command_up', 'src': 'trying', 'dst': 'up'},
-                 {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
-                 {'name': 'command_trying', 'src': 'up', 'dst': 'trying'},
-                 {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
-             ]}
+            {
+                'initial': 'down',
+                'events': [
+                    {'name': 'connect', 'src': 'down', 'dst': 'trying'},
+                    {'name': 'command_up', 'src': 'trying', 'dst': 'up'},
+                    {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
+                    {'name': 'command_trying', 'src': 'up', 'dst': 'trying'},
+                    {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
+                ],
+            }
         )
 
         self._fsm.ondown = self._on_fsm_down

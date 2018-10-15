@@ -1,4 +1,3 @@
-# coding=utf-8
 from __future__ import unicode_literals
 import socket
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
@@ -42,8 +41,10 @@ class Service(object):
         return '_%s._%s.%s.' % (self.base_type, self.protocol, self.domain)
 
     def matches_service_info(self, info):
-        return self.type == info.properties.get(b'service', b'').decode() \
+        return (
+            self.type == info.properties.get(b'service', b'').decode()
             and self.typestring in info.type
+        )
 
     def __eq__(self, other):
         if isinstance(other, ServiceInfo):
@@ -89,8 +90,10 @@ class Service(object):
     def _update_uri(self):
         url = urlparse(self._raw_uri)
         host = url.hostname
-        if not (host is None or self.host_name is None) and \
-           host.lower() in self.host_name.lower():  # hostname is in form .local. and host in .local
+        if (
+            not (host is None or self.host_name is None)
+            and host.lower() in self.host_name.lower()
+        ):  # hostname is in form .local. and host in .local
             netloc = url.netloc
             netloc = netloc.replace(host, self.host_address)
             new_url = url._replace(netloc=netloc)  # use resolved address
@@ -128,8 +131,13 @@ class ServiceDiscoveryFilter(object):
 
 
 class ServiceDiscovery(object):
-    def __init__(self, service_type='machinekit', filter_=ServiceDiscoveryFilter(),
-                 nameservers=None, lookup_interval=None):
+    def __init__(
+        self,
+        service_type='machinekit',
+        filter_=ServiceDiscoveryFilter(),
+        nameservers=None,
+        lookup_interval=None,
+    ):
         """ Initialize the multicast or unicast DNS-SD service discovery instance.
         @param service_type DNS-SD type use for discovery, does not need to be changed for Machinekit.
         @param filter_ Optional filter can be used to look for specific instances.
@@ -174,7 +182,9 @@ class ServiceDiscovery(object):
                 kwargs = {'addr': nameserver}
                 if self.lookup_interval:
                     kwargs['delay'] = self.lookup_interval
-                self._browsers.append(ServiceBrowser(zeroconf, type_string, self, **kwargs))
+                self._browsers.append(
+                    ServiceBrowser(zeroconf, type_string, self, **kwargs)
+                )
 
     def _stop_discovery(self):
         for zeroconf in self._zeroconfs:
@@ -189,7 +199,9 @@ class ServiceDiscovery(object):
         if info is None:
             return
         for service in self.services:
-            if self.filter.matches_service_info(info) and service.matches_service_info(info):
+            if self.filter.matches_service_info(info) and service.matches_service_info(
+                info
+            ):
                 service.remove_service_info(info)
 
     def add_service(self, zeroconf, type_, name):
@@ -197,7 +209,9 @@ class ServiceDiscovery(object):
         if info is None:
             return
         for service in self.services:
-            if self.filter.matches_service_info(info) and service.matches_service_info(info):
+            if self.filter.matches_service_info(info) and service.matches_service_info(
+                info
+            ):
                 service.add_service_info(info)
 
     @staticmethod
@@ -212,12 +226,16 @@ class ServiceDiscovery(object):
 
     def register(self, item):
         if self.is_ready:
-            raise RuntimeError('cannot register service when service discovery is already running')
+            raise RuntimeError(
+                'cannot register service when service discovery is already running'
+            )
         self._verify_item_and_run(item, self.services.append)
 
     def unregister(self, item):
         if self.is_ready:
-            raise RuntimeError('cannot unregister service when service discovery is already running')
+            raise RuntimeError(
+                'cannot unregister service when service discovery is already running'
+            )
         self._verify_item_and_run(item, self.services.remove)
 
     def start(self):

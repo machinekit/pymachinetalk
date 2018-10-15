@@ -10,6 +10,7 @@ try:
 except ImportError:
     try:
         from ez_setup import use_setuptools
+
         use_setuptools()
         from setuptools import setup, Extension, find_packages
     except ImportError:
@@ -28,36 +29,23 @@ else:
     # Python 2
     from distutils.command.build_py import build_py as build_py
 
-requirements = ['pyzmq',
-                'protobuf',
-                'machinetalk-protobuf',
-                'fysom',
-                'six']
+requirements = ['pyzmq', 'protobuf', 'machinetalk-protobuf', 'fysom', 'six']
 if sys.version_info <= (3, 3):
     requirements.append('zeroconf<=0.19.1')  # freeze version
 else:
     requirements.append('zeroconf')
 
 if __name__ == '__main__':
-    setup(name="pymachinetalk",
-          version="0.10.0",
-          description="Python bindings for Machinetalk",
-          author="Alexander Roessler",
-          author_email="alex@machinekoder.com",
-          url="https://github.com/machinekit/pymachinetalk",
-          namespace_packages=['pymachinetalk'],
-          packages=find_packages(),
-          install_requires=requirements,
-          extras_require={
-              'dev': [
-                  'pytest',
-                  'pytest-mock',
-                  'pytest-pep8',
-                  'pytest-cov',
-              ]
-          },
-          cmdclass={
-              'clean': clean,
-              'build_py': build_py,
-          }
-          )
+    setup(
+        name="pymachinetalk",
+        version="0.11",
+        description="Python bindings for Machinetalk",
+        author="Alexander Roessler",
+        author_email="alex@machinekoder.com",
+        url="https://github.com/machinekit/pymachinetalk",
+        namespace_packages=['pymachinetalk'],
+        packages=find_packages(),
+        install_requires=requirements,
+        extras_require={'dev': ['pytest', 'pytest-mock', 'pytest-pep8', 'pytest-cov']},
+        cmdclass={'clean': clean, 'build_py': build_py},
+    )
