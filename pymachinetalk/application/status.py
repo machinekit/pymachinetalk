@@ -44,7 +44,7 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
         self._synced_channels = set()
         self.channels = {'motion', 'config', 'task', 'io', 'interp'}
 
-        self._status_service = Service(type_='service')
+        self._status_service = Service(type_='status')
         self.add_service(self._status_service)
         self.on_services_ready_changed.append(self._on_services_ready_changed)
 
