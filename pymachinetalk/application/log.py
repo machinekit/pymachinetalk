@@ -5,17 +5,26 @@ from collections import namedtuple
 from ..common import ComponentBase
 from ..dns_sd import ServiceContainer, Service
 from ..machinetalk_core.application.logbase import LogBase
+
 # noinspection PyUnresolvedReferences
-from machinetalk.protobuf.types_pb2 import (RTAPI_MSG_ALL, RTAPI_MSG_DBG, RTAPI_MSG_ERR,
-                                            RTAPI_MSG_INFO, RTAPI_MSG_WARN, MSG_KERNEL, MSG_RTUSER, MSG_ULAPI)
+from machinetalk.protobuf.types_pb2 import (
+    RTAPI_MSG_ALL,
+    RTAPI_MSG_DBG,
+    RTAPI_MSG_ERR,
+    RTAPI_MSG_INFO,
+    RTAPI_MSG_WARN,
+    MSG_KERNEL,
+    MSG_RTUSER,
+    MSG_ULAPI,
+)
 
 
 ApplicationLogMessage = namedtuple(
-    'ApplicationLogMessage', 'level origin tag pid text timestamp')
+    'ApplicationLogMessage', 'level origin tag pid text timestamp'
+)
 
 
 class ApplicationLog(ComponentBase, LogBase, ServiceContainer):
-
     def __init__(self, debug=False):
         LogBase.__init__(self, debuglevel=int(debug))
         ComponentBase.__init__(self)
@@ -60,7 +69,7 @@ class ApplicationLog(ComponentBase, LogBase, ServiceContainer):
             pid=log_message.pid,
             tag=log_message.tag,
             text=log_message.text,
-            timestamp=self._convert_timestamp(rx.tv_sec, rx.tv_nsec)
+            timestamp=self._convert_timestamp(rx.tv_sec, rx.tv_nsec),
         )
         for cb in self.on_message_received:
             cb(msg)

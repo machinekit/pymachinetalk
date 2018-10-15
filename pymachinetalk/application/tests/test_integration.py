@@ -5,8 +5,10 @@ from pymachinetalk import application
 from pymachinetalk import dns_sd
 
 
-@pytest.mark.skipif(sys.version_info >= (3, 0),
-                    reason="Integration tests hang for some reason with Python3")
+@pytest.mark.skipif(
+    sys.version_info >= (3, 0),
+    reason="Integration tests hang for some reason with Python3",
+)
 def test_application_integration():
     status = application.ApplicationStatus()
     command = application.ApplicationCommand()

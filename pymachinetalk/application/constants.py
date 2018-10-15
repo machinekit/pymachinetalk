@@ -3,6 +3,7 @@
 # protobuf
 import machinetalk.protobuf.types_pb2 as types
 import machinetalk.protobuf.motcmds_pb2 as motcmds
+
 # noinspection PyUnresolvedReferences
 from machinetalk.protobuf.status_pb2 import *
 

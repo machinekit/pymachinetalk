@@ -7,6 +7,7 @@ import zmq
 
 # Machinekit specific, can only use on local machine
 from machinekit import config
+
 # Machinetalk bindings
 from pymachinetalk.dns_sd import ServiceDiscovery, ServiceDiscoveryFilter
 from pymachinetalk.application import ApplicationStatus
@@ -22,12 +23,12 @@ else:
     import ConfigParser as configparser
 
 
-class IPCServer():
+class IPCServer:
     def __init__(self, uuid, debug=True):
         self.debug = debug
         self.threads = []
         self.shutdown = threading.Event()
-        sd_filter = ServiceDiscoveryFilter(txt_records={ 'uuid': uuid })
+        sd_filter = ServiceDiscoveryFilter(txt_records={'uuid': uuid})
         self.sd = ServiceDiscovery(filter_=sd_filter)
         self.status = ApplicationStatus()
         self.command = ApplicationCommand()
@@ -82,20 +83,25 @@ class IPCServer():
             print(str(self._rx))
 
         if self._rx.type == IPC_POSITION:
-            self._tx.x = self.status.motion.position.x - \
-                        self.status.motion.g5x_offset.x - \
-                        self.status.motion.g92_offset.x - \
-                        self.status.io.tool_offset.x
-            self._tx.y = self.status.motion.position.y - \
-                        self.status.motion.g5x_offset.y - \
-                        self.status.motion.g92_offset.y - \
-                        self.status.io.tool_offset.y
+            self._tx.x = (
+                self.status.motion.position.x
+                - self.status.motion.g5x_offset.x
+                - self.status.motion.g92_offset.x
+                - self.status.io.tool_offset.x
+            )
+            self._tx.y = (
+                self.status.motion.position.y
+                - self.status.motion.g5x_offset.y
+                - self.status.motion.g92_offset.y
+                - self.status.io.tool_offset.y
+            )
             self.send_msg(identity, IPC_POSITION)
 
         elif self._rx.type == IPC_JOG:
             self.command.set_task_mode(application.EMC_TASK_MODE_MANUAL)
-            self.command.jog(self._rx.jog_type, self._rx.axis,
-                             self._rx.velocity, self._rx.distance)
+            self.command.jog(
+                self._rx.jog_type, self._rx.axis, self._rx.velocity, self._rx.distance
+            )
 
         elif self._rx.type == IPC_CONNECTED:
             self._tx.connected = self.status.synced and self.command.connected
@@ -144,6 +150,7 @@ def main():
 
     print("threads stopped")
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

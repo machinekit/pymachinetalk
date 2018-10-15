@@ -9,7 +9,6 @@ from ..dns_sd import ServiceContainer, Service
 
 
 class ApplicationFile(ComponentBase, ServiceContainer):
-
     def __init__(self, debug=True):
         self._error_string = ''
         self.on_error_string_changed = []
@@ -82,8 +81,12 @@ class ApplicationFile(ComponentBase, ServiceContainer):
             ftp = ftplib.FTP()
             ftp.connect(host=o.hostname, port=o.port)
             ftp.login()
-            ftp.storbinary('STOR %s' % filename, f, blocksize=8192,
-                           callback=self._progress_callback)
+            ftp.storbinary(
+                'STOR %s' % filename,
+                f,
+                blocksize=8192,
+                callback=self._progress_callback,
+            )
             ftp.close()
             f.close()
         except Exception as e:
@@ -99,7 +102,7 @@ class ApplicationFile(ComponentBase, ServiceContainer):
         o = urlparse(self.file_uri)
         # test o.scheme
 
-        filename = self.remote_file_path[len(self.remote_path):]  # mid
+        filename = self.remote_file_path[len(self.remote_path) :]  # mid
         self.local_file_path = os.path.join(self.local_path, filename)
 
         self._update_state('DownloadRunning')  # lets start the upload

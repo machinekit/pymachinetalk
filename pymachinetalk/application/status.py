@@ -2,14 +2,17 @@
 import threading
 
 from machinetalk.protobuf.message_pb2 import Container
-from machinetalk.protobuf.status_pb2 import EMC_TASK_MODE_AUTO, EMC_TASK_MODE_MDI, EMC_TASK_INTERP_IDLE
+from machinetalk.protobuf.status_pb2 import (
+    EMC_TASK_MODE_AUTO,
+    EMC_TASK_MODE_MDI,
+    EMC_TASK_INTERP_IDLE,
+)
 from ..common import ComponentBase, MessageObject, recurse_descriptor, recurse_message
 from ..dns_sd import ServiceContainer, Service
 from ..machinetalk_core.application.statusbase import StatusBase
 
 
 class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
-
     def __init__(self, debug=False):
         StatusBase.__init__(self, debuglevel=int(debug))
         ComponentBase.__init__(self)
@@ -159,16 +162,24 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
             recurse_descriptor(self._container.emc_status_io.DESCRIPTOR, self._io_data)
         elif channel == 'config':
             self._config_data = MessageObject()
-            recurse_descriptor(self._container.emc_status_config.DESCRIPTOR, self._config_data)
+            recurse_descriptor(
+                self._container.emc_status_config.DESCRIPTOR, self._config_data
+            )
         elif channel == 'motion':
             self._motion_data = MessageObject()
-            recurse_descriptor(self._container.emc_status_motion.DESCRIPTOR, self._motion_data)
+            recurse_descriptor(
+                self._container.emc_status_motion.DESCRIPTOR, self._motion_data
+            )
         elif channel == 'task':
             self._task_data = MessageObject()
-            recurse_descriptor(self._container.emc_status_task.DESCRIPTOR, self._task_data)
+            recurse_descriptor(
+                self._container.emc_status_task.DESCRIPTOR, self._task_data
+            )
         elif channel == 'interp':
             self._interp_data = MessageObject()
-            recurse_descriptor(self._container.emc_status_interp.DESCRIPTOR, self._interp_data)
+            recurse_descriptor(
+                self._container.emc_status_interp.DESCRIPTOR, self._interp_data
+            )
 
     def _update_motion_object(self, data):
         with self.motion_condition:
@@ -198,8 +209,9 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
             self.interp_condition.notify()
 
     def _update_running(self):
-        running = ((self._task_data.task_mode == EMC_TASK_MODE_AUTO
-                    or self._task_data.task_mode == EMC_TASK_MODE_MDI)
-                   and self._interp_data.interp_state == EMC_TASK_INTERP_IDLE)
+        running = (
+            self._task_data.task_mode == EMC_TASK_MODE_AUTO
+            or self._task_data.task_mode == EMC_TASK_MODE_MDI
+        ) and self._interp_data.interp_state == EMC_TASK_INTERP_IDLE
 
         self.running = running

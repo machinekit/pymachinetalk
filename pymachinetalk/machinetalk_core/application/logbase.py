@@ -17,7 +17,9 @@ class LogBase(object):
         self._log_channel = SimpleSubscribe(debuglevel=debuglevel)
         self._log_channel.debugname = '%s - %s' % (self.debugname, 'log')
         self._log_channel.on_state_changed.append(self._log_channel_state_changed)
-        self._log_channel.on_socket_message_received.append(self._log_channel_message_received)
+        self._log_channel.on_socket_message_received.append(
+            self._log_channel_message_received
+        )
         # more efficient to reuse protobuf messages
         self._log_rx = Container()
 
@@ -27,13 +29,15 @@ class LogBase(object):
 
         # fsm
         self._fsm = Fysom(
-            {'initial': 'down',
-             'events': [
-                 {'name': 'connect', 'src': 'down', 'dst': 'trying'},
-                 {'name': 'log_up', 'src': 'trying', 'dst': 'up'},
-                 {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
-                 {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
-             ]}
+            {
+                'initial': 'down',
+                'events': [
+                    {'name': 'connect', 'src': 'down', 'dst': 'trying'},
+                    {'name': 'log_up', 'src': 'trying', 'dst': 'up'},
+                    {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
+                    {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
+                ],
+            }
         )
 
         self._fsm.ondown = self._on_fsm_down

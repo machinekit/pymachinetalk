@@ -46,16 +46,18 @@ class Subscribe(object):
 
         # fsm
         self._fsm = Fysom(
-            {'initial': 'down',
-             'events': [
-                 {'name': 'start', 'src': 'down', 'dst': 'trying'},
-                 {'name': 'full_update_received', 'src': 'trying', 'dst': 'up'},
-                 {'name': 'stop', 'src': 'trying', 'dst': 'down'},
-                 {'name': 'heartbeat_timeout', 'src': 'up', 'dst': 'trying'},
-                 {'name': 'heartbeat_tick', 'src': 'up', 'dst': 'up'},
-                 {'name': 'any_msg_received', 'src': 'up', 'dst': 'up'},
-                 {'name': 'stop', 'src': 'up', 'dst': 'down'},
-             ]}
+            {
+                'initial': 'down',
+                'events': [
+                    {'name': 'start', 'src': 'down', 'dst': 'trying'},
+                    {'name': 'full_update_received', 'src': 'trying', 'dst': 'up'},
+                    {'name': 'stop', 'src': 'trying', 'dst': 'down'},
+                    {'name': 'heartbeat_timeout', 'src': 'up', 'dst': 'trying'},
+                    {'name': 'heartbeat_tick', 'src': 'up', 'dst': 'up'},
+                    {'name': 'any_msg_received', 'src': 'up', 'dst': 'up'},
+                    {'name': 'stop', 'src': 'up', 'dst': 'down'},
+                ],
+            }
         )
 
         self._fsm.ondown = self._on_fsm_down
@@ -184,8 +186,9 @@ class Subscribe(object):
                 self._socket_message_received(socket)
 
     def start_socket(self):
-        self._thread = threading.Thread(target=self._socket_worker,
-                                        args=(self._context, self.socket_uri,))
+        self._thread = threading.Thread(
+            target=self._socket_worker, args=(self._context, self.socket_uri)
+        )
         self._thread.start()
 
     def stop_socket(self):
@@ -222,8 +225,7 @@ class Subscribe(object):
 
         if self._heartbeat_interval > 0:
             self._heartbeat_timer = threading.Timer(
-                self._heartbeat_interval / 1000.0,
-                self._heartbeat_timer_tick
+                self._heartbeat_interval / 1000.0, self._heartbeat_timer_tick
             )
             self._heartbeat_timer.start()
         self._heartbeat_lock.release()
@@ -265,7 +267,7 @@ class Subscribe(object):
 
         # react to ping message
         if rx.type == pb.MT_PING:
-            return   # ping is uninteresting
+            return  # ping is uninteresting
 
         # react to full update message
         elif rx.type == pb.MT_FULL_UPDATE:

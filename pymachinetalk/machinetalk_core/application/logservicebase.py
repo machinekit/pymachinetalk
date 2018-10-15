@@ -24,11 +24,13 @@ class LogServiceBase(object):
 
         # fsm
         self._fsm = Fysom(
-            {'initial': 'down',
-             'events': [
-                 {'name': 'connect', 'src': 'down', 'dst': 'up'},
-                 {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
-             ]}
+            {
+                'initial': 'down',
+                'events': [
+                    {'name': 'connect', 'src': 'down', 'dst': 'up'},
+                    {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
+                ],
+            }
         )
 
         self._fsm.ondown = self._on_fsm_down

@@ -2,15 +2,25 @@
 import threading
 
 from machinetalk.protobuf.message_pb2 import Container
-from .constants import ENGAGE_BRAKE, RELEASE_BRAKE, JOG_STOP, JOG_CONTINUOUS, JOG_INCREMENT, \
-    SPINDLE_FORWARD, SPINDLE_REVERSE, SPINDLE_OFF, SPINDLE_INCREASE, SPINDLE_DECREASE, SPINDLE_CONSTANT
+from .constants import (
+    ENGAGE_BRAKE,
+    RELEASE_BRAKE,
+    JOG_STOP,
+    JOG_CONTINUOUS,
+    JOG_INCREMENT,
+    SPINDLE_FORWARD,
+    SPINDLE_REVERSE,
+    SPINDLE_OFF,
+    SPINDLE_INCREASE,
+    SPINDLE_DECREASE,
+    SPINDLE_CONSTANT,
+)
 from ..common import ComponentBase
 from ..dns_sd import ServiceContainer, Service
 from ..machinetalk_core.application.commandbase import CommandBase
 
 
 class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
-
     def __init__(self, debug=False):
         CommandBase.__init__(self, debuglevel=int(debug))
         ComponentBase.__init__(self)
@@ -56,7 +66,9 @@ class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
 
     def wait_executed(self, ticket=None, timeout=None):
         with self.executed_condition:
-            if ticket and ticket <= self.executed_ticket:  # very likely that we already received the reply
+            if (
+                ticket and ticket <= self.executed_ticket
+            ):  # very likely that we already received the reply
                 return True
 
             while True:
@@ -69,7 +81,9 @@ class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
 
     def wait_completed(self, ticket=None, timeout=None):
         with self.completed_condition:
-            if ticket and ticket < self.completed_ticket:  # very likely that we already received the reply
+            if (
+                ticket and ticket < self.completed_ticket
+            ):  # very likely that we already received the reply
                 return True
 
             while True:
@@ -480,7 +494,9 @@ class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
         self.send_emc_traj_set_teleop_vector(self._tx)
         return self._take_ticket()
 
-    def set_tool_offset(self, index, zoffset, xoffset, diameter, frontangle, backangle, orientation):
+    def set_tool_offset(
+        self, index, zoffset, xoffset, diameter, frontangle, backangle, orientation
+    ):
         if not self.connected:
             return None
 

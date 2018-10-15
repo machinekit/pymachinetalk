@@ -17,8 +17,12 @@ class RemoteComponentBase(object):
         # Halrcmd
         self._halrcmd_channel = RpcClient(debuglevel=debuglevel)
         self._halrcmd_channel.debugname = '%s - %s' % (self.debugname, 'halrcmd')
-        self._halrcmd_channel.on_state_changed.append(self._halrcmd_channel_state_changed)
-        self._halrcmd_channel.on_socket_message_received.append(self._halrcmd_channel_message_received)
+        self._halrcmd_channel.on_state_changed.append(
+            self._halrcmd_channel_state_changed
+        )
+        self._halrcmd_channel.on_socket_message_received.append(
+            self._halrcmd_channel_message_received
+        )
         # more efficient to reuse protobuf messages
         self._halrcmd_rx = Container()
         self._halrcmd_tx = Container()
@@ -26,8 +30,12 @@ class RemoteComponentBase(object):
         # Halrcomp
         self._halrcomp_channel = HalrcompSubscribe(debuglevel=debuglevel)
         self._halrcomp_channel.debugname = '%s - %s' % (self.debugname, 'halrcomp')
-        self._halrcomp_channel.on_state_changed.append(self._halrcomp_channel_state_changed)
-        self._halrcomp_channel.on_socket_message_received.append(self._halrcomp_channel_message_received)
+        self._halrcomp_channel.on_state_changed.append(
+            self._halrcomp_channel_state_changed
+        )
+        self._halrcomp_channel.on_socket_message_received.append(
+            self._halrcomp_channel_message_received
+        )
         # more efficient to reuse protobuf messages
         self._halrcomp_rx = Container()
 
@@ -38,29 +46,31 @@ class RemoteComponentBase(object):
 
         # fsm
         self._fsm = Fysom(
-            {'initial': 'down',
-             'events': [
-                 {'name': 'connect', 'src': 'down', 'dst': 'trying'},
-                 {'name': 'halrcmd_up', 'src': 'trying', 'dst': 'bind'},
-                 {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
-                 {'name': 'halrcomp_bind_msg_sent', 'src': 'bind', 'dst': 'binding'},
-                 {'name': 'no_bind', 'src': 'bind', 'dst': 'syncing'},
-                 {'name': 'bind_confirmed', 'src': 'binding', 'dst': 'syncing'},
-                 {'name': 'bind_rejected', 'src': 'binding', 'dst': 'error'},
-                 {'name': 'halrcmd_trying', 'src': 'binding', 'dst': 'trying'},
-                 {'name': 'disconnect', 'src': 'binding', 'dst': 'down'},
-                 {'name': 'halrcmd_trying', 'src': 'syncing', 'dst': 'trying'},
-                 {'name': 'halrcomp_up', 'src': 'syncing', 'dst': 'sync'},
-                 {'name': 'sync_failed', 'src': 'syncing', 'dst': 'error'},
-                 {'name': 'disconnect', 'src': 'syncing', 'dst': 'down'},
-                 {'name': 'pins_synced', 'src': 'sync', 'dst': 'synced'},
-                 {'name': 'halrcomp_trying', 'src': 'synced', 'dst': 'syncing'},
-                 {'name': 'halrcmd_trying', 'src': 'synced', 'dst': 'trying'},
-                 {'name': 'set_rejected', 'src': 'synced', 'dst': 'error'},
-                 {'name': 'halrcomp_set_msg_sent', 'src': 'synced', 'dst': 'synced'},
-                 {'name': 'disconnect', 'src': 'synced', 'dst': 'down'},
-                 {'name': 'disconnect', 'src': 'error', 'dst': 'down'},
-             ]}
+            {
+                'initial': 'down',
+                'events': [
+                    {'name': 'connect', 'src': 'down', 'dst': 'trying'},
+                    {'name': 'halrcmd_up', 'src': 'trying', 'dst': 'bind'},
+                    {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
+                    {'name': 'halrcomp_bind_msg_sent', 'src': 'bind', 'dst': 'binding'},
+                    {'name': 'no_bind', 'src': 'bind', 'dst': 'syncing'},
+                    {'name': 'bind_confirmed', 'src': 'binding', 'dst': 'syncing'},
+                    {'name': 'bind_rejected', 'src': 'binding', 'dst': 'error'},
+                    {'name': 'halrcmd_trying', 'src': 'binding', 'dst': 'trying'},
+                    {'name': 'disconnect', 'src': 'binding', 'dst': 'down'},
+                    {'name': 'halrcmd_trying', 'src': 'syncing', 'dst': 'trying'},
+                    {'name': 'halrcomp_up', 'src': 'syncing', 'dst': 'sync'},
+                    {'name': 'sync_failed', 'src': 'syncing', 'dst': 'error'},
+                    {'name': 'disconnect', 'src': 'syncing', 'dst': 'down'},
+                    {'name': 'pins_synced', 'src': 'sync', 'dst': 'synced'},
+                    {'name': 'halrcomp_trying', 'src': 'synced', 'dst': 'syncing'},
+                    {'name': 'halrcmd_trying', 'src': 'synced', 'dst': 'trying'},
+                    {'name': 'set_rejected', 'src': 'synced', 'dst': 'error'},
+                    {'name': 'halrcomp_set_msg_sent', 'src': 'synced', 'dst': 'synced'},
+                    {'name': 'disconnect', 'src': 'synced', 'dst': 'down'},
+                    {'name': 'disconnect', 'src': 'error', 'dst': 'down'},
+                ],
+            }
         )
 
         self._fsm.ondown = self._on_fsm_down

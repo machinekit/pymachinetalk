@@ -38,12 +38,14 @@ class SimpleSubscribe(object):
 
         # fsm
         self._fsm = Fysom(
-            {'initial': 'down',
-             'events': [
-                 {'name': 'start', 'src': 'down', 'dst': 'up'},
-                 {'name': 'any_msg_received', 'src': 'up', 'dst': 'up'},
-                 {'name': 'stop', 'src': 'up', 'dst': 'down'},
-             ]}
+            {
+                'initial': 'down',
+                'events': [
+                    {'name': 'start', 'src': 'down', 'dst': 'up'},
+                    {'name': 'any_msg_received', 'src': 'up', 'dst': 'up'},
+                    {'name': 'stop', 'src': 'up', 'dst': 'down'},
+                ],
+            }
         )
 
         self._fsm.ondown = self._on_fsm_down
@@ -135,8 +137,9 @@ class SimpleSubscribe(object):
                 self._socket_message_received(socket)
 
     def start_socket(self):
-        self._thread = threading.Thread(target=self._socket_worker,
-                                        args=(self._context, self.socket_uri,))
+        self._thread = threading.Thread(
+            target=self._socket_worker, args=(self._context, self.socket_uri)
+        )
         self._thread.start()
 
     def stop_socket(self):

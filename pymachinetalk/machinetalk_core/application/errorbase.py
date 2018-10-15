@@ -17,7 +17,9 @@ class ErrorBase(object):
         self._error_channel = ErrorSubscribe(debuglevel=debuglevel)
         self._error_channel.debugname = '%s - %s' % (self.debugname, 'error')
         self._error_channel.on_state_changed.append(self._error_channel_state_changed)
-        self._error_channel.on_socket_message_received.append(self._error_channel_message_received)
+        self._error_channel.on_socket_message_received.append(
+            self._error_channel_message_received
+        )
         # more efficient to reuse protobuf messages
         self._error_rx = Container()
 
@@ -27,14 +29,16 @@ class ErrorBase(object):
 
         # fsm
         self._fsm = Fysom(
-            {'initial': 'down',
-             'events': [
-                 {'name': 'connect', 'src': 'down', 'dst': 'trying'},
-                 {'name': 'error_up', 'src': 'trying', 'dst': 'up'},
-                 {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
-                 {'name': 'error_trying', 'src': 'up', 'dst': 'trying'},
-                 {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
-             ]}
+            {
+                'initial': 'down',
+                'events': [
+                    {'name': 'connect', 'src': 'down', 'dst': 'trying'},
+                    {'name': 'error_up', 'src': 'trying', 'dst': 'up'},
+                    {'name': 'disconnect', 'src': 'trying', 'dst': 'down'},
+                    {'name': 'error_trying', 'src': 'up', 'dst': 'trying'},
+                    {'name': 'disconnect', 'src': 'up', 'dst': 'down'},
+                ],
+            }
         )
 
         self._fsm.ondown = self._on_fsm_down
