@@ -21,30 +21,31 @@ else:
 
 
 class TerminalUI(object):
-    def __init__(self, uuid, use_curses):
+    def __init__(self, uuid, use_curses, debug=False):
         sd_filter = ServiceDiscoveryFilter(txt_records={'uuid': uuid})
         self.sd = ServiceDiscovery(filter_=sd_filter)
 
         halrcomp = halremote.component('test')
+        halrcomp.debug = debug
         halrcomp.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp = halrcomp
         self.sd.register(halrcomp)
 
-        halrcomp2 = halremote.RemoteComponent(name='test2', debug=False)
+        halrcomp2 = halremote.RemoteComponent(name='test2', debug=debug)
         halrcomp2.newpin("coolant-iocontrol", halremote.HAL_BIT, halremote.HAL_IN)
         halrcomp2.newpin("coolant", halremote.HAL_BIT, halremote.HAL_OUT)
         self.halrcomp2 = halrcomp2
         self.sd.register(halrcomp2)
 
-        self.status = ApplicationStatus(debug=False)
+        self.status = ApplicationStatus(debug=debug)
         self.status.on_synced_changed.append(self._on_status_synced)
         self.sd.register(self.status)
-        self.command = ApplicationCommand(debug=False)
+        self.command = ApplicationCommand(debug=debug)
         self.sd.register(self.command)
-        self.error = ApplicationError(debug=False)
+        self.error = ApplicationError(debug=debug)
         self.sd.register(self.error)
-        self.fileservice = ApplicationFile(debug=True)
+        self.fileservice = ApplicationFile(debug=debug)
         self.fileservice.local_file_path = 'test.ngc'
         self.fileservice.local_path = './ngc/'
         self.fileservice.remote_path = '/home/xy/'
