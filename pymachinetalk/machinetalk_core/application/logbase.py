@@ -46,7 +46,6 @@ class LogBase(object):
         self._fsm.onafterlog_up = self._on_fsm_log_up
         self._fsm.onafterdisconnect = self._on_fsm_disconnect
         self._fsm.onup = self._on_fsm_up
-        self._fsm.onenterup = self._on_fsm_up_entry
         self._fsm.onleaveup = self._on_fsm_up_exit
 
     def _on_fsm_down(self, _):
@@ -83,15 +82,12 @@ class LogBase(object):
 
     def _on_fsm_up(self, _):
         if self.debuglevel > 0:
+            print('[%s]: state UP entry' % self.debugname)
+        self.set_connected()
+        if self.debuglevel > 0:
             print('[%s]: state UP' % self.debugname)
         for cb in self.on_state_changed:
             cb('up')
-        return True
-
-    def _on_fsm_up_entry(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: state UP entry' % self.debugname)
-        self.set_connected()
         return True
 
     def _on_fsm_up_exit(self, _):

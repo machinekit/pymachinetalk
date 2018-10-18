@@ -75,7 +75,6 @@ class RemoteComponentBase(object):
 
         self._fsm.ondown = self._on_fsm_down
         self._fsm.onafterconnect = self._on_fsm_connect
-        self._fsm.onenterdown = self._on_fsm_down_entry
         self._fsm.onleavedown = self._on_fsm_down_exit
         self._fsm.ontrying = self._on_fsm_trying
         self._fsm.onafterhalrcmd_up = self._on_fsm_halrcmd_up
@@ -96,11 +95,12 @@ class RemoteComponentBase(object):
         self._fsm.onafterhalrcomp_trying = self._on_fsm_halrcomp_trying
         self._fsm.onafterset_rejected = self._on_fsm_set_rejected
         self._fsm.onafterhalrcomp_set_msg_sent = self._on_fsm_halrcomp_set_msg_sent
-        self._fsm.onentersynced = self._on_fsm_synced_entry
         self._fsm.onerror = self._on_fsm_error
-        self._fsm.onentererror = self._on_fsm_error_entry
 
     def _on_fsm_down(self, _):
+        if self.debuglevel > 0:
+            print('[%s]: state DOWN entry' % self.debugname)
+        self.set_disconnected()
         if self.debuglevel > 0:
             print('[%s]: state DOWN' % self.debugname)
         for cb in self.on_state_changed:
@@ -112,12 +112,6 @@ class RemoteComponentBase(object):
             print('[%s]: event CONNECT' % self.debugname)
         self.add_pins()
         self.start_halrcmd_channel()
-        return True
-
-    def _on_fsm_down_entry(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: state DOWN entry' % self.debugname)
-        self.set_disconnected()
         return True
 
     def _on_fsm_down_exit(self, _):
@@ -222,6 +216,9 @@ class RemoteComponentBase(object):
 
     def _on_fsm_synced(self, _):
         if self.debuglevel > 0:
+            print('[%s]: state SYNCED entry' % self.debugname)
+        self.set_connected()
+        if self.debuglevel > 0:
             print('[%s]: state SYNCED' % self.debugname)
         for cb in self.on_state_changed:
             cb('synced')
@@ -246,23 +243,14 @@ class RemoteComponentBase(object):
             print('[%s]: event HALRCOMP SET MSG SENT' % self.debugname)
         return True
 
-    def _on_fsm_synced_entry(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: state SYNCED entry' % self.debugname)
-        self.set_connected()
-        return True
-
     def _on_fsm_error(self, _):
+        if self.debuglevel > 0:
+            print('[%s]: state ERROR entry' % self.debugname)
+        self.set_error()
         if self.debuglevel > 0:
             print('[%s]: state ERROR' % self.debugname)
         for cb in self.on_state_changed:
             cb('error')
-        return True
-
-    def _on_fsm_error_entry(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: state ERROR entry' % self.debugname)
-        self.set_error()
         return True
 
     @property
