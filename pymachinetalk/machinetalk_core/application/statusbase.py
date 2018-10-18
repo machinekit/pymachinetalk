@@ -53,7 +53,6 @@ class StatusBase(object):
         self._fsm.onafterchannels_synced = self._on_fsm_channels_synced
         self._fsm.onafterstatus_trying = self._on_fsm_status_trying
         self._fsm.onup = self._on_fsm_up
-        self._fsm.onenterup = self._on_fsm_up_entry
         self._fsm.onleaveup = self._on_fsm_up_exit
 
     def _on_fsm_down(self, _):
@@ -107,15 +106,12 @@ class StatusBase(object):
 
     def _on_fsm_up(self, _):
         if self.debuglevel > 0:
+            print('[%s]: state UP entry' % self.debugname)
+        self.sync_status()
+        if self.debuglevel > 0:
             print('[%s]: state UP' % self.debugname)
         for cb in self.on_state_changed:
             cb('up')
-        return True
-
-    def _on_fsm_up_entry(self, _):
-        if self.debuglevel > 0:
-            print('[%s]: state UP entry' % self.debugname)
-        self.sync_status()
         return True
 
     def _on_fsm_up_exit(self, _):
