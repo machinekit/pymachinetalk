@@ -163,7 +163,7 @@ class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
 
         self._tx.interp_name = interpreter
 
-        self._take_ticket()
+        ticket = self._take_ticket()
         self.send_emc_task_plan_step(self._tx)
         return ticket
 
@@ -185,7 +185,7 @@ class ApplicationCommand(ComponentBase, CommandBase, ServiceContainer):
         params.task_mode = mode
         self._tx.interp_name = interpreter
 
-        self._take_ticket()
+        ticket = self._take_ticket()
         self.send_emc_task_set_mode(self._tx)
         return ticket
 
