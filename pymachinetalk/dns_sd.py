@@ -1,3 +1,4 @@
+# coding=utf-8
 from __future__ import unicode_literals
 import socket
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
@@ -129,6 +130,9 @@ class ServiceDiscoveryFilter(object):
                 break
         return match
 
+    def matches_name(self, name):
+        return self.name in name
+
 
 class ServiceDiscovery(object):
     def __init__(
@@ -194,15 +198,10 @@ class ServiceDiscovery(object):
         for service in self.services:
             service.clear_service_infos()
 
-    def remove_service(self, zeroconf, type_, name):
-        info = zeroconf.get_service_info(type_, name)
-        if info is None:
-            return
+    def remove_service(self, _zeroconf, _type, name):
         for service in self.services:
-            if self.filter.matches_service_info(info) and service.matches_service_info(
-                info
-            ):
-                service.remove_service_info(info)
+            if self.filter.matches_name(name):
+                service.remove_service_info(name)
 
     def add_service(self, zeroconf, type_, name):
         info = zeroconf.get_service_info(type_, name)

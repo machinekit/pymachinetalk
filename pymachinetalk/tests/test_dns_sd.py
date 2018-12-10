@@ -189,11 +189,15 @@ def test_service_disappeared_updates_registered_services(dns_sd, sd, zeroconf):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
 
+    zeroconf.get_service_info.return_value = ServiceInfoFactory.create(
+        name='Foo on Bar', host='127.0.0.1'
+    )
     sd.add_service(
         zeroconf,
         '_machinekit._tcp.local.',
         'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
     )
+    zeroconf.get_service_info.return_value = None
     sd.remove_service(
         zeroconf,
         '_machinekit._tcp.local.',
@@ -234,22 +238,6 @@ def test_service_discovered_without_service_info_does_not_update_registered_serv
     )
 
     assert service.ready is False
-
-
-def test_service_disappeared_without_service_info_does_not_update_registered_services(
-    dns_sd, sd, zeroconf_without_service_info
-):
-    service = dns_sd.Service(type_='halrcomp')
-    sd.register(service)
-    service.ready = True
-
-    sd.remove_service(
-        zeroconf_without_service_info,
-        '_machinekit._tcp.local.',
-        'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
-    )
-
-    assert service.ready is True
 
 
 def test_service_info_sets_all_relevant_values_of_service(dns_sd):
@@ -320,7 +308,7 @@ def test_removing_service_info_resets_all_relevant_values_of_service(dns_sd):
     service_info = ServiceInfoFactory().create()
     service.add_service_info(service_info)
 
-    service.remove_service_info(service_info)
+    service.remove_service_info(service_info.name)
 
     assert service.uri == ''
     assert service.name == ''
@@ -461,6 +449,7 @@ def test_service_discovery_filter_accept_fuzzy_name(dns_sd):
     filter_ = dns_sd.ServiceDiscoveryFilter(name='Hello')
 
     assert filter_.matches_service_info(service_info) is True
+    assert filter_.matches_name(service_info.name) is True
 
 
 def test_service_discovery_filter_accept_exact_matching_name(dns_sd):
@@ -468,6 +457,7 @@ def test_service_discovery_filter_accept_exact_matching_name(dns_sd):
     filter_ = dns_sd.ServiceDiscoveryFilter(name='Foo')
 
     assert filter_.matches_service_info(service_info) is True
+    assert filter_.matches_name(service_info.name) is True
 
 
 def test_service_discovery_filter_reject_non_matching_name(dns_sd):
@@ -475,6 +465,7 @@ def test_service_discovery_filter_reject_non_matching_name(dns_sd):
     filter_ = dns_sd.ServiceDiscoveryFilter(name='Adolfus Maximus')
 
     assert filter_.matches_service_info(service_info) is False
+    assert filter_.matches_name(service_info.name) is False
 
 
 def test_service_discovery_filter_passing_wrong_object_fails(dns_sd):
@@ -487,7 +478,9 @@ def test_service_discovery_filter_passing_wrong_object_fails(dns_sd):
         assert True
 
 
-def test_service_discovery_filters_out_discovered_service_with_wrong_uuid(dns_sd, sd, zeroconf):
+def test_service_discovery_filters_out_discovered_service_with_wrong_uuid(
+    dns_sd, sd, zeroconf
+):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
     sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'87654321'})
@@ -523,6 +516,9 @@ def test_service_discovery_filters_in_disappeared_service_with_correct_uuid(
     sd.register(service)
     sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'12345678'})
 
+    zeroconf.get_service_info.return_value = ServiceInfoFactory.create(
+        name='SuperPrint', host='192.168.7.2'
+    )
     sd.add_service(
         zeroconf,
         '_machinekit._tcp.local.',
