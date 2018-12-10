@@ -25,6 +25,7 @@ class Service(object):
 
         # callback
         self.on_ready_changed = []
+        self.on_service_infos_updated = []
 
     @property
     def ready(self):
@@ -55,13 +56,20 @@ class Service(object):
     def add_service_info(self, info):
         self.service_infos.append(info)
         self._update()
+        for cb in self.on_service_infos_updated:
+            cb()
 
-    def remove_service_info(self, _):
-        for info in self.service_infos:
-            if self == info:
+    def remove_service_info(self, name):
+        updated = False
+        for info in list(self.service_infos):
+            if info.name == name:
                 self.service_infos.remove(info)
+                updated = True
                 break
-        self._update()
+        if updated:
+            self._update()
+            for cb in self.on_service_infos_updated:
+                cb()
 
     def clear_service_infos(self):
         self.service_infos = []
