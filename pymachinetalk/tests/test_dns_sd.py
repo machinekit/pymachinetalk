@@ -1,4 +1,6 @@
 # coding=utf-8
+import socket
+
 import pytest
 
 
@@ -143,7 +145,7 @@ class ServiceInfoFactory(object):
             type_=typestring,
             name='%s %s.%s' % (name, host, typestring),
             properties=properties,
-            address=(address or host).encode(),
+            address=socket.inet_aton(address or host),
             port=port,
             server=server,
         )

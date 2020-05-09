@@ -1,5 +1,8 @@
 # coding=utf-8
 import threading
+
+import six
+
 from .dns_sd import ServiceContainer, Service
 from .common import ComponentBase
 
@@ -255,7 +258,7 @@ class RemoteComponent(ComponentBase, RemoteComponentBase, ServiceContainer):
         c = self._tx.comp.add()
         c.name = self.name
         c.no_create = self.no_create  # for now we create the component
-        for name, pin in self.pinsbyname.iteritems():
+        for name, pin in six.iteritems(self.pinsbyname):
             p = c.pin.add()
             p.name = '%s.%s' % (self.name, name)
             p.type = pin.pintype

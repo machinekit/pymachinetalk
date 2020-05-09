@@ -29,7 +29,7 @@ else:
     # Python 2
     from distutils.command.build_py import build_py as build_py
 
-requirements = ['pyzmq', 'protobuf', 'machinetalk-protobuf', 'fysom', 'six']
+requirements = ['pyzmq', 'protobuf', 'machinetalk-protobuf', 'fysom', 'six>=1.12.0']
 if sys.version_info <= (3, 3):
     requirements.append('zeroconf<=0.19.1')  # freeze version
 else:
