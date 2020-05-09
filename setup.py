@@ -38,7 +38,7 @@ else:
 if __name__ == '__main__':
     setup(
         name="pymachinetalk",
-        version="0.12.0",
+        version="0.12.1",
         description="Python bindings for Machinetalk",
         author="Alexander Roessler",
         author_email="alex@machinekoder.com",
