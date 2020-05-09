@@ -1,9 +1,14 @@
 # coding=utf-8
 from __future__ import unicode_literals
+import re
 import socket
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
 import six
 from six.moves.urllib.parse import urlparse
+
+# see: https://stackoverflow.com/a/15831118/5768039
+def ireplace(old, repl, text):
+    return re.sub('(?i)' + re.escape(old), lambda m: repl, text)
 
 
 class Service(object):
@@ -91,9 +96,9 @@ class Service(object):
         self.version = info.properties.get(b'version', b'')
         self.host_name = info.server
         try:
-            self.host_address = socket.inet_ntoa(info.address).decode()
+            self.host_address = six.ensure_str(socket.inet_ntoa(info.address))
         except (OSError, socket.error):
-            self.host_address = info.address.decode()
+            self.host_address = six.ensure_str(info.address)
         self._update_uri()
 
     def _update_uri(self):
@@ -104,7 +109,7 @@ class Service(object):
             and host.lower() in self.host_name.lower()
         ):  # hostname is in form .local. and host in .local
             netloc = url.netloc
-            netloc = netloc.replace(host, self.host_address)
+            netloc = ireplace(host, self.host_address, netloc)
             new_url = url._replace(netloc=netloc)  # use resolved address
             self.uri = new_url.geturl()
         else:
