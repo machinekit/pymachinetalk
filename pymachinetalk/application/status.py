@@ -1,5 +1,6 @@
 # coding=utf-8
 import threading
+import six
 
 from machinetalk.protobuf.message_pb2 import Container
 from machinetalk.protobuf.status_pb2 import (
