@@ -105,7 +105,8 @@ class Service(object):
         url = urlparse(self._raw_uri)
         host = url.hostname
         if (
-            not (host is None or self.host_name is None)
+            host is not None
+            and self.host_name is not None
             and host.lower() in self.host_name.lower()
         ):  # hostname is in form .local. and host in .local
             netloc = url.netloc
@@ -138,7 +139,7 @@ class ServiceDiscoveryFilter(object):
         if self.name not in info.name:
             match = False
         for name, value in six.iteritems(self.txt_records):
-            if not info.properties[name] == value:
+            if info.properties[name] != value:
                 match = False
                 break
         return match
@@ -155,7 +156,7 @@ class ServiceDiscovery(object):
         nameservers=None,
         lookup_interval=None,
     ):
-        """ Initialize the multicast or unicast DNS-SD service discovery instance.
+        """Initialize the multicast or unicast DNS-SD service discovery instance.
         @param service_type DNS-SD type use for discovery, does not need to be changed for Machinekit.
         @param filter_ Optional filter can be used to look for specific instances.
         @param nameservers Pass one or more nameserver addresses to enabled unicast service discovery.
@@ -295,9 +296,5 @@ class ServiceContainer(object):
                 cb(value)
 
     def _update_services_ready(self, _):
-        ready = True
-        for service in self._services:
-            if not service.ready:
-                ready = False
-                break
+        ready = all(service.ready for service in self._services)
         self.services_ready = ready

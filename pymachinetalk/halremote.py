@@ -196,11 +196,8 @@ class RemoteComponent(ComponentBase, RemoteComponentBase, ServiceContainer):
             pin.value = 0.0
         elif pintype == HAL_BIT:
             pin.value = False
-        elif pintype == HAL_S32:
+        elif pintype in (HAL_S32, HAL_U32):
             pin.value = 0
-        elif pintype == HAL_U32:
-            pin.value = 0
-
         return pin
 
     def unsync_pins(self):

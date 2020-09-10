@@ -15,8 +15,7 @@ def dns_sd():
 def sd():
     from pymachinetalk import dns_sd
 
-    sd = dns_sd.ServiceDiscovery()
-    return sd
+    return dns_sd.ServiceDiscovery()
 
 
 def test_registering_services_from_service_container_works(dns_sd, sd):
