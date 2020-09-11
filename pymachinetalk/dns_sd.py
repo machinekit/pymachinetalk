@@ -2,9 +2,10 @@
 from __future__ import unicode_literals
 import re
 import socket
-from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
-import six
-from six.moves.urllib.parse import urlparse
+from urllib.parse import urlparse
+
+from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo, ServiceListener
+
 
 # see: https://stackoverflow.com/a/15831118/5768039
 def ireplace(old, repl, text):
@@ -64,14 +65,15 @@ class Service(object):
         for cb in self.on_service_infos_updated:
             cb()
 
+    def update_service_info(self, info):
+        self._remove_service_info_entry(info.name)
+        self.service_infos.append(info)
+        self._update()
+        for cb in self.on_service_infos_updated:
+            cb()
+
     def remove_service_info(self, name):
-        updated = False
-        for info in list(self.service_infos):
-            if info.name == name:
-                self.service_infos.remove(info)
-                updated = True
-                break
-        if updated:
+        if self._remove_service_info_entry(name):
             self._update()
             for cb in self.on_service_infos_updated:
                 cb()
@@ -79,6 +81,15 @@ class Service(object):
     def clear_service_infos(self):
         self.service_infos = []
         self._update()
+
+    def _remove_service_info_entry(self, name):
+        updated = False
+        for info in list(self.service_infos):
+            if info.name == name:
+                self.service_infos.remove(info)
+                updated = True
+                break
+        return updated
 
     def _update(self):
         if any(self.service_infos):
@@ -96,16 +107,17 @@ class Service(object):
         self.version = info.properties.get(b'version', b'')
         self.host_name = info.server
         try:
-            self.host_address = six.ensure_str(socket.inet_ntoa(info.address))
+            self.host_address = str(socket.inet_ntoa(info.addresses[0]))
         except (OSError, socket.error):
-            self.host_address = six.ensure_str(info.address)
+            self.host_address = str(info.addresses[0])
         self._update_uri()
 
     def _update_uri(self):
         url = urlparse(self._raw_uri)
         host = url.hostname
         if (
-            not (host is None or self.host_name is None)
+            host is not None
+            and self.host_name is not None
             and host.lower() in self.host_name.lower()
         ):  # hostname is in form .local. and host in .local
             netloc = url.netloc
@@ -137,8 +149,8 @@ class ServiceDiscoveryFilter(object):
         match = True
         if self.name not in info.name:
             match = False
-        for name, value in six.iteritems(self.txt_records):
-            if not info.properties[name] == value:
+        for name, value in self.txt_records.items():
+            if info.properties[name] != value:
                 match = False
                 break
         return match
@@ -147,7 +159,8 @@ class ServiceDiscoveryFilter(object):
         return self.name in name
 
 
-class ServiceDiscovery(object):
+class ServiceDiscovery(ServiceListener):
+
     def __init__(
         self,
         service_type='machinekit',
@@ -155,7 +168,7 @@ class ServiceDiscovery(object):
         nameservers=None,
         lookup_interval=None,
     ):
-        """ Initialize the multicast or unicast DNS-SD service discovery instance.
+        """Initialize the multicast or unicast DNS-SD service discovery instance.
         @param service_type DNS-SD type use for discovery, does not need to be changed for Machinekit.
         @param filter_ Optional filter can be used to look for specific instances.
         @param nameservers Pass one or more nameserver addresses to enabled unicast service discovery.
@@ -226,6 +239,16 @@ class ServiceDiscovery(object):
             ):
                 service.add_service_info(info)
 
+    def update_service(self, zeroconf, type_, name):
+        info = zeroconf.get_service_info(type_, name)
+        if info is None:
+            return
+        for service in self.services:
+            if self.filter.matches_service_info(info) and service.matches_service_info(
+                info
+            ):
+                service.update_service_info(info)
+
     @staticmethod
     def _verify_item_and_run(item, cmd):
         if isinstance(item, ServiceContainer):
@@ -295,9 +318,5 @@ class ServiceContainer(object):
                 cb(value)
 
     def _update_services_ready(self, _):
-        ready = True
-        for service in self._services:
-            if not service.ready:
-                ready = False
-                break
+        ready = all(service.ready for service in self._services)
         self.services_ready = ready

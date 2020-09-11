@@ -21,24 +21,15 @@ except ImportError:
         raise
 
 from distutils.command.clean import clean
+from distutils.command.build_py import build_py_2to3 as build_py
 
-if sys.version_info[0] == 3:
-    # Python 3
-    from distutils.command.build_py import build_py_2to3 as build_py
-else:
-    # Python 2
-    from distutils.command.build_py import build_py as build_py
+requirements = ['pyzmq', 'protobuf', 'machinetalk-protobuf', 'fysom', 'zeroconf']
 
-requirements = ['pyzmq', 'protobuf', 'machinetalk-protobuf', 'fysom', 'six>=1.12.0']
-if sys.version_info <= (3, 3):
-    requirements.append('zeroconf<=0.19.1')  # freeze version
-else:
-    requirements.append('zeroconf')
 
 if __name__ == '__main__':
     setup(
         name="pymachinetalk",
-        version="0.12.3",
+        version="0.13.0",
         description="Python bindings for Machinetalk",
         author="Alexander Roessler",
         author_email="alex@machinekoder.com",

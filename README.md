@@ -52,6 +52,8 @@ sudo apt install python-pip
 sudo pip install pymachinetalk
 ```
 
+**Note:** If you need Python 2.7 support, use version 0.12.3 from PyPI.
+
 ## Install from Source
 
 ### Requirements

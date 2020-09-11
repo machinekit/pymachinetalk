@@ -15,8 +15,7 @@ def dns_sd():
 def sd():
     from pymachinetalk import dns_sd
 
-    sd = dns_sd.ServiceDiscovery()
-    return sd
+    return dns_sd.ServiceDiscovery()
 
 
 def test_registering_services_from_service_container_works(dns_sd, sd):
@@ -145,7 +144,7 @@ class ServiceInfoFactory(object):
             type_=typestring,
             name='%s %s.%s' % (name, host, typestring),
             properties=properties,
-            address=socket.inet_aton(address or host),
+            addresses=[socket.inet_aton(address or host)],
             port=port,
             server=server,
         )
@@ -179,6 +178,24 @@ def test_service_discovered_updates_registered_services(dns_sd, sd, zeroconf):
     sd.register(service)
 
     sd.add_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
+    )
+
+    assert service.ready is True
+
+
+def test_service_updated_updates_registered_services(dns_sd, sd, zeroconf):
+    service = dns_sd.Service(type_='halrcomp')
+    sd.register(service)
+
+    sd.add_service(
+        zeroconf,
+        '_machinekit._tcp.local.',
+        'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
+    )
+    sd.update_service(
         zeroconf,
         '_machinekit._tcp.local.',
         'Foo on Bar 127.0.0.1._machinekit._tcp.local.',
@@ -261,6 +278,38 @@ def test_service_info_sets_all_relevant_values_of_service(dns_sd):
     assert service.uuid == '987654321'
     assert service.version == 5
     assert service.host_name == 'sandybox.local'
+    assert service.host_address == '10.0.0.10'
+
+
+def test_service_info_updates_all_values_of_service(dns_sd):
+    service = dns_sd.Service(type_='halrcomp')
+    service_info = ServiceInfoFactory().create(
+        name='Foo on Bar',
+        uuid=b'987654321',
+        version=5,
+        host='10.0.0.10',
+        protocol='tcp',
+        port=12456,
+        server='sandybox.local',
+    )
+    service.add_service_info(service_info)
+
+    service_info = ServiceInfoFactory().create(
+        name='Foo on Bar',
+        uuid=b'nBzl8w',
+        version=10,
+        host='10.0.0.10',
+        protocol='udp',
+        port=12456,
+        server='forest.local',
+    )
+    service.update_service_info(service_info)
+
+    assert service.uri == 'udp://10.0.0.10:12456'
+    assert service.name == service_info.name
+    assert service.uuid == 'nBzl8w'
+    assert service.version == 10
+    assert service.host_name == 'forest.local'
     assert service.host_address == '10.0.0.10'
 
 
