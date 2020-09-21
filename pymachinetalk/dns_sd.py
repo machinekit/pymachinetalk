@@ -150,7 +150,7 @@ class ServiceDiscoveryFilter(object):
         if self.name not in info.name:
             match = False
         for name, value in self.txt_records.items():
-            if info.properties[name] != value:
+            if info.properties[name.encode()] != value.encode():
                 match = False
                 break
         return match
