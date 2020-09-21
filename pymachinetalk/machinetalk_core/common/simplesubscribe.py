@@ -153,6 +153,7 @@ class SimpleSubscribe(object):
     # process all messages received on socket
     def _socket_message_received(self, socket):
         (identity, msg) = socket.recv_multipart()  # identity is topic
+        identity = identity.decode()
 
         try:
             self._socket_rx.ParseFromString(msg)
