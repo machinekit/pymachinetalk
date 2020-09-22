@@ -29,7 +29,7 @@ requirements = ['pyzmq', 'protobuf', 'machinetalk-protobuf', 'fysom', 'zeroconf'
 if __name__ == '__main__':
     setup(
         name="pymachinetalk",
-        version="0.13.1",
+        version="0.13.2",
         description="Python bindings for Machinetalk",
         author="Alexander Roessler",
         author_email="alex@machinekoder.com",
