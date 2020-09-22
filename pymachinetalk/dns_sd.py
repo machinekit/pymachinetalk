@@ -172,10 +172,11 @@ class ServiceDiscovery(ServiceListener):
         lookup_interval=None,
     ):
         """Initialize the multicast or unicast DNS-SD service discovery instance.
-        @param service_type DNS-SD type use for discovery, does not need to be changed for Machinekit.
-        @param filter_ Optional filter can be used to look for specific instances.
-        @param nameservers Pass one or more nameserver addresses to enabled unicast service discovery.
-        @param lookup_interval How often the SD should send out service queries.
+        @param service_type DNS-SD type use for discovery, does not need to be
+        changed for Machinekit. @param filter_ Optional filter can be used to look
+        for specific instances. @param nameservers Pass one or more nameserver
+        addresses to enabled unicast service discovery. @param lookup_interval How
+        often the SD should send out service queries.
         """
         if nameservers is None:
             nameservers = []
