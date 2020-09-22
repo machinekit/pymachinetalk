@@ -163,7 +163,6 @@ class ServiceDiscoveryFilter(object):
 
 
 class ServiceDiscovery(ServiceListener):
-
     def __init__(
         self,
         service_type='machinekit',
@@ -229,28 +228,30 @@ class ServiceDiscovery(ServiceListener):
             service.clear_service_infos()
 
     def remove_service(self, _zeroconf, _type, name):
+        if not self.filter.matches_name(name):
+            return
         for service in self.services:
-            if self.filter.matches_name(name):
-                service.remove_service_info(name)
+            service.remove_service_info(name)
 
     def add_service(self, zeroconf, type_, name):
         info = zeroconf.get_service_info(type_, name)
         if info is None:
             return
+        if not self.filter.matches_service_info(info):
+            return
         for service in self.services:
-            if self.filter.matches_service_info(info) and service.matches_service_info(
-                info
-            ):
+            if service.matches_service_info(info):
                 service.add_service_info(info)
 
     def update_service(self, zeroconf, type_, name):
         info = zeroconf.get_service_info(type_, name)
         if info is None:
+            self.remove_service(zeroconf, type_, name)
+            return
+        if not self.filter.matches_service_info(info):
             return
         for service in self.services:
-            if self.filter.matches_service_info(info) and service.matches_service_info(
-                info
-            ):
+            if service.matches_service_info(info):
                 service.update_service_info(info)
 
     @staticmethod
