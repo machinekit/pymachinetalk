@@ -104,7 +104,10 @@ class Service(object):
         self.name = info.name
         self._raw_uri = info.properties.get(b'dsn', b'').decode()
         self.uuid = info.properties.get(b'uuid', b'').decode()
-        self.version = info.properties.get(b'version', b'')
+        try:
+            self.version = int(info.properties.get(b'version', b''))
+        except ValueError:
+            self.version = 0
         self.host_name = info.server
         try:
             self.host_address = str(socket.inet_ntoa(info.addresses[0]))
