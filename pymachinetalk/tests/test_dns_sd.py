@@ -124,7 +124,7 @@ class ServiceInfoFactory(object):
         host='127.0.0.1',
         protocol='tcp',
         port=12345,
-        version=0,
+        version=b'0',
         properties=None,
         server='127.0.0.1',
         address=None,
@@ -264,7 +264,7 @@ def test_service_info_sets_all_relevant_values_of_service(dns_sd):
     service_info = ServiceInfoFactory().create(
         name='Foo on Bar',
         uuid=b'987654321',
-        version=5,
+        version=b'5',
         host='10.0.0.10',
         protocol='tcp',
         port=12456,
@@ -286,7 +286,7 @@ def test_service_info_updates_all_values_of_service(dns_sd):
     service_info = ServiceInfoFactory().create(
         name='Foo on Bar',
         uuid=b'987654321',
-        version=5,
+        version=b'5',
         host='10.0.0.10',
         protocol='tcp',
         port=12456,
@@ -297,7 +297,7 @@ def test_service_info_updates_all_values_of_service(dns_sd):
     service_info = ServiceInfoFactory().create(
         name='Foo on Bar',
         uuid=b'nBzl8w',
-        version=10,
+        version=b'10',
         host='10.0.0.10',
         protocol='udp',
         port=12456,
@@ -351,7 +351,7 @@ def test_service_info_with_incomplete_values_is_ignored_by_service(dns_sd):
 
     assert service.uri == ''
     assert service.uuid == ''
-    assert service.version == b''
+    assert service.version == 0
 
 
 def test_removing_service_info_resets_all_relevant_values_of_service(dns_sd):
@@ -483,14 +483,14 @@ def test_discoverable_services_ready_changed_calls_callback(dns_sd):
 
 def test_service_discovery_filter_accept_correct_uuid(dns_sd):
     service_info = ServiceInfoFactory().create(uuid=b'987654321')
-    filter_ = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'987654321'})
+    filter_ = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '987654321'})
 
     assert filter_.matches_service_info(service_info) is True
 
 
 def test_service_discovery_filter_reject_wrong_uuid(dns_sd):
     service_info = ServiceInfoFactory().create(uuid=b'123456789')
-    filter_ = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'987654321'})
+    filter_ = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '987654321'})
 
     assert filter_.matches_service_info(service_info) is False
 
@@ -534,7 +534,7 @@ def test_service_discovery_filters_out_discovered_service_with_wrong_uuid(
 ):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
-    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'87654321'})
+    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '87654321'})
 
     sd.add_service(
         zeroconf,
@@ -550,7 +550,7 @@ def test_service_discovery_filters_in_discovered_service_with_correct_uuid(
 ):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
-    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'12345678'})
+    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '12345678'})
 
     sd.add_service(
         zeroconf,
@@ -565,7 +565,7 @@ def test_service_discovery_filters_in_disappeared_service_with_correct_uuid(
 ):
     service = dns_sd.Service(type_='halrcomp')
     sd.register(service)
-    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={b'uuid': b'12345678'})
+    sd.filter = dns_sd.ServiceDiscoveryFilter(txt_records={'uuid': '12345678'})
 
     zeroconf.get_service_info.return_value = ServiceInfoFactory.create(
         name='SuperPrint', host='192.168.7.2'
