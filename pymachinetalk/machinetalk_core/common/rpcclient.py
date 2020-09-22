@@ -191,7 +191,11 @@ class RpcClient(object):
 
     def start_socket(self):
         self._thread = threading.Thread(
-            target=self._socket_worker, args=(self._context, self.socket_uri)
+            target=self._socket_worker,
+            args=(
+                self._context,
+                self.socket_uri,
+            ),
         )
         self._thread.start()
 

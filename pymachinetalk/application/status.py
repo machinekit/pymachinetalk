@@ -1,6 +1,5 @@
 # coding=utf-8
 import threading
-import six
 
 from machinetalk.protobuf.message_pb2 import Container
 from machinetalk.protobuf.status_pb2 import (
@@ -118,7 +117,6 @@ class ApplicationStatus(ComponentBase, StatusBase, ServiceContainer):
         self._emcstat_update_received(topic, rx)
 
     def _emcstat_update_received(self, topic, rx):
-        topic = six.ensure_str(topic)
         if topic == 'motion' and rx.HasField('emc_status_motion'):
             self._update_motion_object(rx.emc_status_motion)
         elif topic == 'config' and rx.HasField('emc_status_config'):

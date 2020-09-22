@@ -2,7 +2,8 @@
 import ftplib
 import os
 import threading
-from six.moves.urllib.parse import urlparse
+
+from urllib.parse import urlparse
 
 from ..common import ComponentBase
 from ..dns_sd import ServiceContainer, Service

@@ -116,9 +116,9 @@ class LogServiceBase(object):
         self._log_channel.stop()
 
     def send_log_message(self, identity, msg_type, tx):
-        self._log_channel.send_socket_message(identity, msg_type, tx)
+        self._log_channel.send_socket_message(identity.encode(), msg_type, tx)
 
     def send_log_message(self, identity, tx):
-        ids = [identity]
+        ids = [identity.encode()]
         for receiver in ids:
             self.send_log_message(receiver, pb.MT_LOG_MESSAGE, tx)

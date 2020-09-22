@@ -104,7 +104,10 @@ class Service(object):
         self.name = info.name
         self._raw_uri = info.properties.get(b'dsn', b'').decode()
         self.uuid = info.properties.get(b'uuid', b'').decode()
-        self.version = info.properties.get(b'version', b'')
+        try:
+            self.version = int(info.properties.get(b'version', b''))
+        except ValueError:
+            self.version = 0
         self.host_name = info.server
         try:
             self.host_address = str(socket.inet_ntoa(info.addresses[0]))
@@ -150,7 +153,7 @@ class ServiceDiscoveryFilter(object):
         if self.name not in info.name:
             match = False
         for name, value in self.txt_records.items():
-            if info.properties[name] != value:
+            if info.properties[name.encode()] != value.encode():
                 match = False
                 break
         return match
@@ -169,10 +172,11 @@ class ServiceDiscovery(ServiceListener):
         lookup_interval=None,
     ):
         """Initialize the multicast or unicast DNS-SD service discovery instance.
-        @param service_type DNS-SD type use for discovery, does not need to be changed for Machinekit.
-        @param filter_ Optional filter can be used to look for specific instances.
-        @param nameservers Pass one or more nameserver addresses to enabled unicast service discovery.
-        @param lookup_interval How often the SD should send out service queries.
+        @param service_type DNS-SD type use for discovery, does not need to be
+        changed for Machinekit. @param filter_ Optional filter can be used to look
+        for specific instances. @param nameservers Pass one or more nameserver
+        addresses to enabled unicast service discovery. @param lookup_interval How
+        often the SD should send out service queries.
         """
         if nameservers is None:
             nameservers = []
