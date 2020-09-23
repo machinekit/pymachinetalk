@@ -1,6 +1,6 @@
 # Machinetalk bindings for Python
 [![PyPI version](https://badge.fury.io/py/pymachinetalk.svg)](https://badge.fury.io/py/pymachinetalk)
-[![Build Status](https://travis-ci.org/DiffSK/configobj.svg?branch=master)](https://travis-ci.org/machinekit/pymachinetalk)
+[![Build Status](https://img.shields.io/travis/com/machinekit/pymachinetalk?logo=travis)](https://travis-ci.com/github/machinekit/pymachinetalk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/machinekoder/speed-friending-matcher/blob/master/LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
